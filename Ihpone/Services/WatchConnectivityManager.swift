@@ -20,6 +20,7 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
 
     private var session: WCSession?
     private var currentREMStart: Date?
+    private var watchReportedConnected = false
 
     private override init() {
         super.init()
@@ -109,7 +110,7 @@ private extension PhoneWatchConnectivityManager {
     func refreshReachability(using session: WCSession) {
         let paired = session.isPaired && session.isWatchAppInstalled
         let reachable = session.isReachable || (session.activationState == .activated && paired)
-        isWatchReachable = reachable
+        isWatchReachable = reachable || watchReportedConnected
     }
 
     func requestConnectionPing() {
@@ -132,11 +133,11 @@ private extension PhoneWatchConnectivityManager {
             return
         }
         if let connected = message["connected"] as? Bool {
-            isWatchReachable = connected
+            watchReportedConnected = connected
         }
 
-        if let status = message["status"] as? String, status == WatchSideStatus.inactive.rawValue {
-            isWatchReachable = false
+        if let status = message["status"] as? String {
+            watchReportedConnected = status != WatchSideStatus.inactive.rawValue
         }
 
         if let heartRate = message["heartRate"] as? Double {
