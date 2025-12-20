@@ -10,6 +10,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published var elapsed: TimeInterval = 0
     @Published private(set) var samples: [WatchSleepSample] = []
     @Published private(set) var remWindows: [REMWindow] = []
+    @Published private(set) var currentREMState: REMState = .light
 
     private let healthStore = HKHealthStore()
     private var workoutSession: HKWorkoutSession?
@@ -19,7 +20,6 @@ final class WorkoutManager: NSObject, ObservableObject {
     private let pushInterval: TimeInterval = 5
     private var sessionId = UUID()
     private var sessionStartDate: Date?
-    private var currentREMState: REMState = .light
 
     override init() {
         super.init()
@@ -39,7 +39,11 @@ final class WorkoutManager: NSObject, ObservableObject {
         currentREMState = .light
         WatchSideConnectivityManager.shared.sendSessionEvent(.started(id: sessionId, start: sessionStartDate ?? Date()))
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.elapsed += 1 }
+            Task { [weak self] in
+                await MainActor.run {
+                    self?.elapsed += 1
+                }
+            }
         }
         Task { @MainActor in
             WatchSideConnectivityManager.shared.sendConnectionState(.tracking)
@@ -49,12 +53,14 @@ final class WorkoutManager: NSObject, ObservableObject {
             )
         }
         pushTimer = Timer.scheduledTimer(withTimeInterval: pushInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            Task { [weak self] in
                 guard let self else { return }
-                WatchSideConnectivityManager.shared.sendSnapshot(
-                    heartRate: self.currentHeartRate,
-                    hrv: self.currentHRV
-                )
+                await MainActor.run {
+                    WatchSideConnectivityManager.shared.sendSnapshot(
+                        heartRate: self.currentHeartRate,
+                        hrv: self.currentHRV
+                    )
+                }
             }
         }
     }
@@ -71,6 +77,10 @@ final class WorkoutManager: NSObject, ObservableObject {
         pushTimer = nil
         isTracking = false
         let endDate = Date()
+        WatchSideConnectivityManager.shared.sendSnapshot(
+            heartRate: currentHeartRate,
+            hrv: currentHRV
+        )
         WatchSideConnectivityManager.shared.sendSessionEvent(.ended(id: sessionId, start: sessionStartDate ?? endDate, end: endDate, samples: samples))
         Task { @MainActor in
             WatchSideConnectivityManager.shared.sendConnectionState(.ready)
