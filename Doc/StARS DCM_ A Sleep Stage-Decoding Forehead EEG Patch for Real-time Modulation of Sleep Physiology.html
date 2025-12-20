@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<!-- saved from url=(0058)https://arxiv.org/html/2506.03442v2?utm_source=chatgpt.com -->
+<html lang="en" prefix="dcterms: http://purl.org/dc/terms/" data-theme="light"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<title>StARS DCM: A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology</title>
+<!--Generated on Fri Jun  6 13:30:25 2025 by LaTeXML (version 0.8.8) http://dlmf.nist.gov/LaTeXML/.-->
+<meta content="width=device-width, initial-scale=1, shrink-to-fit=no" name="viewport">
+<link href="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/bootstrap.min.css" rel="stylesheet" type="text/css">
+<link href="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/ar5iv.0.7.9.min.css" rel="stylesheet" type="text/css">
+<link href="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/ar5iv-fonts.0.7.9.min.css" rel="stylesheet" type="text/css">
+<link href="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/latexml_styles.css" rel="stylesheet" type="text/css">
+<script src="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/bootstrap.bundle.min.js"></script>
+<script src="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/html2canvas.min.js"></script>
+<script src="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/addons_new.js"></script>
+<script src="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/feedbackOverlay.js"></script>
+<!--<base href="/html/2506.03442v2/">--><base href="."><link rel="stylesheet" href="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/utz6mli.css"><link rel="icon" type="image/png" href="https://static.arxiv.org/static/browse/0.3.4/images/icons/favicon-16x16.png" sizes="16x16"><link rel="icon" type="image/png" href="https://static.arxiv.org/static/browse/0.3.4/images/icons/favicon-32x32.png" sizes="32x32"></head>
+<body><header class="mob_header">
+    <div class="html-header-logo">
+      <a href="https://arxiv.org/">
+        <img alt="logo" class="logomark" role="presentation" width="100" src="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/arxiv-logomark-small-white.svg">
+        <span class="sr-only">Back to arXiv</span>
+      </a>
+    </div>
+
+    <!--TOC, dark mode, links-->
+    <div class="html-header-nav">
+      <!--back to abstract-->
+      
+        <a class="nav-link ar5iv-footer-button hover-effect" aria-label="Back to abstract page" href="https://arxiv.org/abs/2506.03442v2?utm_source=chatgpt.com">
+        <svg xmlns="http://www.w3.org/2000/svg" height="1.25em" viewBox="0 0 512 512" fill="#ffffff" aria-hidden="true">
+            <path d="M502.6 278.6c12.5-12.5 12.5-32.8 0-45.3l-128-128c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L402.7 224 192 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l210.7 0-73.4 73.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l128-128zM160 96c17.7 0 32-14.3 32-32s-14.3-32-32-32L96 32C43 32 0 75 0 128L0 384c0 53 43 96 96 96l64 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-64 0c-17.7 0-32-14.3-32-32l0-256c0-17.7 14.3-32 32-32l64 0z"></path>
+        </svg>
+        </a>
+      <!--dark mode-->
+      <a class="ar5iv-toggle-color-scheme" href="javascript:toggleColorScheme()" title="Toggle dark/light mode" aria-label="System preference">
+        <label id="automatic-tog" class="toggle-icon" title="Switch to light mode" for="__palette_3">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9h-1.9M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69m-9.15 3.96h2.3L12 9l-1.15 3.65Z"></path></svg>
+        </label>
+        <label id="light-tog" class="toggle-icon" title="Switch to dark mode" for="__palette_1" hidden="">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"></path></svg>
+        </label>
+        <label id="dark-tog" class="toggle-icon" title="Switch to system preference" for="__palette_2" hidden="">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12c0-2.42-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"></path></svg>
+        </label>
+      </a>
+      <!--nav-->
+      <button class="navbar-toggler ar5iv-footer-button" type="button" data-bs-theme="dark" data-bs-toggle="collapse" aria-expanded="false" data-bs-target=".ltx_page_main &gt;.ltx_TOC.mobile" aria-controls="navbarSupportedContent" aria-label="Toggle navigation" style="border:none; margin-right: 0em;">
+        <svg xmlns="http://www.w3.org/2000/svg" height="1.25em" viewBox="0 0 448 512" aria-hidden="true" role="img" fill="#ffffff"><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"></path></svg>
+      </button>
+    </div>
+    </header><header class="desktop_header">
+    <div class="html-header-logo">
+      <a href="https://arxiv.org/">
+          <img alt="logo" class="logo" role="presentation" width="100" src="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/arxiv-logo-one-color-white.svg">
+          <span class="sr-only">Back to arXiv</span>
+      </a>
+    </div>
+    <div class="html-header-message" role="banner">
+        <p>This is <strong>experimental HTML</strong> to improve accessibility. We invite you to report rendering errors. <span class="sr-only">Use Alt+Y to toggle on accessible reporting links and Alt+Shift+Y to toggle off.</span> Learn more <a href="https://info.arxiv.org/about/accessible_HTML.html" target="_blank">about this project</a> and <a href="https://info.arxiv.org/help/submit_latex_best_practices.html" target="_blank">help improve conversions</a>.
+        </p>
+    </div>
+    <nav class="html-header-nav">
+      <a class="ar5iv-footer-button hover-effect" href="https://info.arxiv.org/about/accessible_HTML.html" target="_blank">Why HTML?</a>
+      <a class="ar5iv-footer-button hover-effect" target="_blank" href="https://arxiv.org/html/2506.03442v2/#myForm" onclick="event.preventDefault(); var modal = document.getElementById(&#39;myForm&#39;); modal.style.display = &#39;block&#39;; bugReportState.setInitiateWay(&#39;Header&#39;);">Report Issue</a>
+      <a class="ar5iv-footer-button hover-effect" href="https://arxiv.org/abs/2506.03442v2">Back to Abstract</a>
+      <a class="ar5iv-footer-button hover-effect" href="https://arxiv.org/pdf/2506.03442v2" target="_blank">Download PDF</a>
+      <a class="ar5iv-toggle-color-scheme" href="javascript:toggleColorScheme()" title="Toggle dark/light mode">
+        <label id="automatic-tog" class="toggle-icon" title="Switch to light mode" for="__palette_3">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9h-1.9M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69m-9.15 3.96h2.3L12 9l-1.15 3.65Z"></path></svg>
+        </label>
+        <label id="light-tog" class="toggle-icon" title="Switch to dark mode" for="__palette_1" hidden="">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"></path></svg>
+        </label>
+        <label id="dark-tog" class="toggle-icon" title="Switch to system preference" for="__palette_2" hidden="">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12c0-2.42-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"></path></svg>
+        </label>
+      </a>
+    </nav></header>
+
+<div class="ltx_page_main" id="main">
+<nav class="ltx_TOC active" aria-labelledby="toc_header"><h2 id="toc_header" class="sr-only">Table of Contents</h2>
+
+      <div id="listIcon" type="button" class="hide">
+          <svg width="17px" height="17px" viewBox="0 0 512 512" style="pointer-events: none;">
+          <path d="M40 48C26.7 48 16 58.7 16 72v48c0 13.3 10.7 24 24 24H88c13.3 0 24-10.7 24-24V72c0-13.3-10.7-24-24-24H40zM192 64c-17.7 0-32 14.3-32 32s14.3 32 32 32H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H192zm0 160c-17.7 0-32 14.3-32 32s14.3 32 32 32H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H192zm0 160c-17.7 0-32 14.3-32 32s14.3 32 32 32H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H192zM16 232v48c0 13.3 10.7 24 24 24H88c13.3 0 24-10.7 24-24V232c0-13.3-10.7-24-24-24H40c-13.3 0-24 10.7-24 24zM40 368c-13.3 0-24 10.7-24 24v48c0 13.3 10.7 24 24 24H88c13.3 0 24-10.7 24-24V392c0-13.3-10.7-24-24-24H40z"></path>
+          </svg>
+      </div>
+      <div id="arrowIcon" type="button">
+          <svg width="17px" height="17px" viewBox="0 0 448 512" style="pointer-events: none;">
+          <path d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.2 288 416 288c17.7 0 32-14.3 32-32s-14.3-32-32-32l-306.7 0L214.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"></path>
+          </svg>
+      </div><ol class="ltx_toclist"><li class="ltx_tocentry ltx_tocentry_section">
+    <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2?utm_source=chatgpt.com#abstract" title="Abstract">
+      <span class="ltx_text ltx_ref_title">
+        <span class="ltx_tag ltx_tag_ref"></span>
+        Abstract
+      </span>
+    </a></li>
+<li class="ltx_tocentry ltx_tocentry_section"><a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#S1" title="In StARS DCM: A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">I </span><span class="ltx_text ltx_font_smallcaps">OVERVIEW</span></span></a></li>
+<li class="ltx_tocentry ltx_tocentry_section"><a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#S2" title="In StARS DCM: A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">II </span><span class="ltx_text ltx_font_smallcaps">An open-source forehead EEG patch: the DCM</span></span></a></li>
+<li class="ltx_tocentry ltx_tocentry_section">
+<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#S3" title="In StARS DCM: A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">III </span><span class="ltx_text ltx_font_smallcaps">Increasing Slow Waves / Slow Wave Sleep with STARS</span></span></a>
+<ol class="ltx_toclist ltx_toclist_section">
+<li class="ltx_tocentry ltx_tocentry_subsection"><a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#S3.SS1" title="In III Increasing Slow Waves / Slow Wave Sleep with STARS ‣ StARS DCM: A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref"><span class="ltx_text">III-A</span> </span><span class="ltx_text ltx_font_italic">Acoustic slow-wave stimulation (aSTIM) </span></span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsection"><a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#S3.SS2" title="In III Increasing Slow Waves / Slow Wave Sleep with STARS ‣ StARS DCM: A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref"><span class="ltx_text">III-B</span> </span><span class="ltx_text ltx_font_italic">Enhancing slow waves with dynamic bedding temperature yoked to sleep cycle patterns</span></span></a></li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_section"><a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#S4" title="In StARS DCM: A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">IV </span><span class="ltx_text ltx_font_smallcaps">Summary</span></span></a></li>
+<li class="ltx_tocentry ltx_tocentry_section">
+    <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2?utm_source=chatgpt.com#bib" title="References">
+      <span class="ltx_text ltx_ref_title">
+        <span class="ltx_tag ltx_tag_ref"></span>
+        References
+      </span>
+    </a></li></ol></nav>
+
+<div class="ltx_page_content"><div class="package-alerts ltx_document" role="status" aria-label="Conversion errors have been found">
+      <button aria-label="Dismiss alert" onclick="closePopup()">
+          <span aria-hidden="true"><svg role="presentation" width="20" height="20" viewBox="0 0 44 44" aria-hidden="true" focusable="false">
+          <path d="M0.549989 4.44999L4.44999 0.549988L43.45 39.55L39.55 43.45L0.549989 4.44999Z"></path>
+          <path d="M39.55 0.549988L43.45 4.44999L4.44999 43.45L0.549988 39.55L39.55 0.549988Z"></path>
+          </svg></span>
+      </button>
+      <p>HTML conversions <a href="https://info.dev.arxiv.org/about/accessibility_html_error_messages.html" target="_blank">sometimes display errors</a> due to content that did not convert correctly from the source. This paper uses the following packages that are not yet supported by the HTML conversion tool. Feedback on these issues are not necessary; they are known and are being worked on.</p>
+          <ul arial-label="Unsupported packages used in this paper">
+              <li>failed: textgreek</li>
+          </ul>
+      <p>Authors: achieve the best HTML results from your LaTeX submissions by following these <a href="https://info.arxiv.org/help/submit_latex_best_practices.html" target="_blank">best practices</a>.</p>
+    </div><div id="target-section" class="section"><a id="license-tr" href="https://info.arxiv.org/help/license/index.html#licenses-available">License: CC BY-NC-SA 4.0</a><div id="watermark-tr">arXiv:2506.03442v2 [eess.SP] 06 Jun 2025</div></div>
+<article class="ltx_document ltx_authors_1line">
+<h1 class="ltx_title ltx_font_bold ltx_title_document" style="font-size:173%;">
+<span class="ltx_text ltx_font_typewriter ltx_font_medium" id="id8.id1">StARS DCM</span>: A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology
+</h1><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+<div class="ltx_authors">
+<span class="ltx_creator ltx_role_author">
+<span class="ltx_personname">William G. Coon<sup class="ltx_sup" id="id9.8.id1"><span class="ltx_text ltx_font_italic" id="id9.8.id1.1">1,</span></sup><sup class="ltx_sup" id="id10.9.id2"><span class="ltx_text ltx_font_italic" id="id10.9.id2.1">2</span></sup>, Preston Peranich<sup class="ltx_sup" id="id11.10.id3"><span class="ltx_text ltx_font_italic" id="id11.10.id3.1">1</span></sup>, and Griffin Milsap<sup class="ltx_sup" id="id12.11.id4"><span class="ltx_text ltx_font_italic" id="id12.11.id4.1">1,</span></sup><sup class="ltx_sup" id="id13.12.id5"><span class="ltx_text ltx_font_italic" id="id13.12.id5.1">2</span></sup>
+</span><span class="ltx_author_notes">*This work was supported by the John Hopkins University Applied Physics Laboratory. Corresponding authors: <span class="ltx_text ltx_font_typewriter" id="id14.13.id1">will.coon@jhuapl.edu</span> and <span class="ltx_text ltx_font_typewriter" id="id15.14.id2">griffin.milsap@jhuapl.edu</span><sup class="ltx_sup" id="id16.15.id1"><span class="ltx_text ltx_font_italic" id="id16.15.id1.1">1</span></sup>Johns Hopkins University Applied Physics Laboratory,
+11100 Johns Hopkins Rd., Laurel, MD 20723, USA
+<sup class="ltx_sup" id="id17.16.id1"><span class="ltx_text ltx_font_italic" id="id17.16.id1.1">2</span></sup>Johns Hopkins University Whiting School of Engineering,
+11100 Johns Hopkins Rd., Laurel, MD 20723, USA</span></span>
+</div><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+<div class="ltx_abstract" id="abstract">
+<h6 class="ltx_title ltx_title_abstract">Abstract</h6><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+<p class="ltx_p" id="id18.id1">The System to Augment Restorative Sleep (StARS) is a modular hardware/software platform designed for real-time sleep monitoring and intervention. Utilizing the compact DCM biosignal device, StARS captures electrophysiological signals (EEG, EMG, EOG) and synchronizes sensor data using the <span class="ltx_text ltx_font_typewriter" id="id18.id1.1">ezmsg</span> real-time software framework. StARS supports interventions such as closed-loop auditory stimulation and dynamic thermal modulation guided by sleep-stage decoding via advanced neural network models and transfer learning. Configurable with a lightweight EEG forehead patch or wearable sensors like smart rings, StARS offers flexible, low-burden solutions for EEG, BCI, and sleep-enhancement research and applications. The open-source DCM patch further enables customizable EEG device development.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+<figure class="ltx_figure" id="S0.F1"><img alt="Refer to caption" class="ltx_graphics ltx_centering ltx_img_landscape" height="368" id="S0.F1.g1" src="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/StARS-arxiv-figs-02.png" width="598">
+<figcaption class="ltx_caption ltx_centering"><span class="ltx_tag ltx_tag_figure">Figure 1: </span><span class="ltx_text ltx_font_bold" id="S0.F1.2.1">StARS</span> can utilize the DCM (JHU/APL), an open-source forehead EEG patch designed for realtime processing and sleep research.</figcaption>
+</figure><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+<section class="ltx_section" id="S1">
+<h2 class="ltx_title ltx_title_section">
+<span class="ltx_tag ltx_tag_section">I </span><span class="ltx_text ltx_font_smallcaps" id="S1.1.1">OVERVIEW</span>
+</h2><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+<div class="ltx_para" id="S1.p1">
+<p class="ltx_p" id="S1.p1.1">Sleep is fundamental to good health and optimal performance, yet Americans are chronically sleep-deprived<cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib1" title="">1</a>]</cite> and America’s armed services even more so <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib2" title="">2</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib3" title="">3</a>]</cite>. Inadequate sleep impairs cognitive function <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib4" title="">4</a>]</cite>, learning capacity <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib5" title="">5</a>]</cite>, memory <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib6" title="">6</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib7" title="">7</a>]</cite>, immune system function <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib8" title="">8</a>]</cite>, neural waste metabolite clearance <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib9" title="">9</a>]</cite>, physical recovery <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib10" title="">10</a>]</cite>, cardiovascular health <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib11" title="">11</a>]</cite>, and growth and metabolism <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib12" title="">12</a>]</cite>. It has been linked to cognitive decline in old age <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib13" title="">13</a>]</cite>, specific maladies of the brain like Alzheimer’s Disease and dementia<cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib14" title="">14</a>]</cite>, and may even underlie the increased risk of these neurodegenerative sequelae in those who have suffered a traumatic brain injury (TBI) <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib15" title="">15</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib16" title="">16</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib17" title="">17</a>]</cite>. While many of the functions above have been linked to non-rapid eye movement (NREM) sleep, rapid eye movement (REM) sleep plays a critical role in processing emotional memory <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib18" title="">18</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib19" title="">19</a>]</cite>, and the dysfunction of this process may contribute to post-traumatic stress disorder (PTSD) <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib20" title="">20</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib21" title="">21</a>]</cite>. Systems that can initiate and maintain different sleep states on-demand offer whole new avenues to treat disease <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib22" title="">22</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib23" title="">23</a>]</cite>, and may even be able to increase sleep’s efficiency, achieving its restorative effects in less time.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+<div class="ltx_para" id="S1.p2">
+<p class="ltx_p" id="S1.p2.1">To these ends, JHU/APL has developed a modular hardware/software ecosystem, configured for these purposes as JHU/APL’s System to Augment Restorative Sleep (StARS), that can support standardization and research in sleep and accelerate the development of sleep-enhancing technologies. StARS is a system of modular attachables (sensors, compute, effectors) that can accurately decode sleep in real time and support a wide variety of sleep stimulation protocols. Its software backbone has been built using a publicly available, JHU/APL built, high-throughput messaging framework called <span class="ltx_text ltx_font_typewriter" id="S1.p2.1.1">ezmsg</span> (pip-installable or available for free at github.com/ezmsg-org/ezmsg). <span class="ltx_text ltx_font_typewriter" id="S1.p2.1.2">ezmsg</span> employs a publisher-subscriber (“pub/sub”) model, similar to and cross-compatible with Robot Operating System (ROS) and Lab Streaming Layer (LSL), that is optimized for realtime applications and the coordination of multiple systems (ex. sensors/effectors/compute), but with lighter computational costs and faster and more efficient messaging than popular alternatives.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+<div class="ltx_para" id="S1.p3">
+<p class="ltx_p" id="S1.p3.1">StARS is an adaptable technology set that can integrate multiple EEG base platforms including the DCM, an APL-designed and manufactured miniaturized sensor suite, approximately the size of two US quarters (Fig. <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#S0.F1" title="Figure 1 ‣ StARS DCM: A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology"><span class="ltx_text ltx_ref_tag">1</span></a>D). The DCM in its simplest configuration can collect up to 16 channels of electrophysiological input such as electroencephalography (EEG), electromyography (EMG), electro-oculography (EOG), etc., at 24-bit resolution. Its snap-based electrode connector allows for auxiliary inputs, wired electrode extensions, and modular sensor boards that can be configured for any desired sensor layout and affixed to the wearer with industry standard EKG-style conductive gel electrode stickers. The DCM additionally contains an IMU (motion sensor), microphone, ambient light/IR sensor, haptic driver and LEDs. StARS’ modularity allows a user to control a variety of effectors to modulate the brain activity and physiological state of the wearer based on closed-loop sensing of brain state (ex. sleep stage), neurophysiology (ex. EEG slow wave detection), behavior (ex. movement, vocalization), or environmental variables (ex. temperature, noise, light).</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+<div class="ltx_para" id="S1.p4">
+<p class="ltx_p" id="S1.p4.1">StARS effectors designed to improve sleep quality include closed-loop auditory stimulation, and bedding temperature modulation conditioned on the wearer’s realtime-decoded ongoing sleep stage dynamics. StARS is also being tested using automated neural network-based sleep stage decoding applied to one of two signal sources: EEG signals, or signals available to peripheral wearables like smart rings and smart watches, such as heart rate, heart rate variability (HRV), motion, and breathing. While non-EEG, peripheral/wearable sleep stage decoders are generally accepted to be far less accurate, JHU/APL has developed novel self-supervised and transfer learning approaches, adapted from the field of audio speech processing, that significantly enhance the accuracy of these decoders <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib24" title="">24</a>]</cite>. This fundamental advance makes possible a compact, low size, weight, and power (SWaP) rendition of StARS consisting only of a smart ring, a smartphone app, and thermoregulating bedding or garments.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+<figure class="ltx_figure" id="S1.F2"><img alt="Refer to caption" class="ltx_graphics ltx_centering ltx_img_landscape" height="274" id="S1.F2.g1" src="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/StARS-arxiv-figs-01.png" width="592">
+<figcaption class="ltx_caption ltx_centering"><span class="ltx_tag ltx_tag_figure">Figure 2: </span><span class="ltx_text ltx_font_bold" id="S1.F2.6.1">Flexible configurations.</span> The DCM forehead patch can be easily reconfigured to adopt one of many possible hardware configurations. <span class="ltx_text ltx_font_bold" id="S1.F2.7.2">A.</span> the DCM board is manufactured on flexible PCB substrates that allow the device’s board modules to fold over one another or to lie flat, allowing the user to achieve a compact stack of boards (as in C), or a flat conformable form factor that adheres to the contours of the forehead. Additionally, optional functionality like NEC or daisy-chained ADC boards can be easily removed if not needed for the intended application. <span class="ltx_text ltx_font_bold" id="S1.F2.8.3">B.</span> DCM’s state-of-the-art dense storage coin cell battery, seen prominently on the lower right of the image as a dark gray disc, allows for full-length recordings with minimal mass/volume add from the battery. <span class="ltx_text ltx_font_bold" id="S1.F2.9.4">C.</span> Configurable and attachable electrode boards (not shown in A or B) allow multiple electrode sensor montages and adaptable numbers of sensor contacts. Differential referencing can also be set at the hardware level for grounded, referenced, and/or bipolar electrode channels derivations. <span class="ltx_text ltx_font_bold" id="S1.F2.10.5">D.</span> DCM configured with a five-sensor electrode board, configured for sleep EEG recordings. Pressing the DCM’s single font-facing button turns on the device, and a double-tap initiates a recording stored directly to its onboard microSD card. </figcaption>
+</figure><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+<figure class="ltx_figure" id="S1.F3"><img alt="Refer to caption" class="ltx_graphics ltx_centering ltx_img_landscape" height="279" id="S1.F3.g1" src="./StARS DCM_ A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology_files/StARS-arxiv-figs-hiresphotos.png" width="598">
+<figcaption class="ltx_caption ltx_centering"><span class="ltx_tag ltx_tag_figure">Figure 3: </span><span class="ltx_text ltx_font_bold" id="S1.F3.6.1">Modular design, configurable form factor</span>: Functional prototype of the DCM. <span class="ltx_text ltx_font_bold" id="S1.F3.7.2">A.</span> PCB has been fabricated, populated, and parted out. Capabilities and sections of the board are labeled. <span class="ltx_text ltx_font_bold" id="S1.F3.8.3">B.</span> Additional analog front end has been attached below main analog frontend for 16-channel recording capability; battery/NFC antenna has been folded under for a thinner form factor with a 10x3 cm footprint, suitable for placement on the forehead. <span class="ltx_text ltx_font_bold" id="S1.F3.9.4">C.</span> Analog frontend can be further folded under the digital side of the board resulting in an even smaller footprint at the expense of another 3 mm of device thickness. Electrode daughterboards connect to the analog frontend either via the board-to-board mezzanine connectors on the analog frontend, or via the FPC connector on the far left of the analog frontend as pictured in configurations A and B. <span class="ltx_text ltx_font_bold" id="S1.F3.10.5">D.</span> A prototype case render for the fully folded version of the DCM.</figcaption>
+</figure><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</section>
+<section class="ltx_section" id="S2">
+<h2 class="ltx_title ltx_title_section">
+<span class="ltx_tag ltx_tag_section">II </span><span class="ltx_text ltx_font_smallcaps" id="S2.1.1">An open-source forehead EEG patch: the DCM</span>
+</h2><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+<div class="ltx_para" id="S2.p1">
+<p class="ltx_p" id="S2.p1.1">The DCM is a forehead patch-style, micro-EEG unit that facilitates synchronized multi-sensor data logging and real-time data streaming. The primary sensor onboard is the ADS1299 precision instrumentation amplifier, capable of capturing 4 to 16 channels of high-resolution electrophysiological signals, currently optimized for neural data acquisition via scalp EEG. The device also includes a 6-axis inertial measurement unit (IMU) for precise motion tracking; a microphone designed to capture speech, behaviorally relevant audible physiology such as respiratory activity and snoring, and ambient environmental audio; and an ambient light sensor to monitor environmental conditions.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+<div class="ltx_para" id="S2.p2">
+<p class="ltx_p" id="S2.p2.1">Data storage and logging are managed through an integrated microSD card, ensuring robust and reliable data capture. The DCM provides intuitive user feedback through a multi-color LED indicator (Fig. <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#S1.F2" title="Figure 2 ‣ I OVERVIEW ‣ StARS DCM: A Sleep Stage-Decoding Forehead EEG Patch for Real-time Modulation of Sleep Physiology"><span class="ltx_text ltx_ref_tag">2</span></a>D) and haptic feedback via an embedded linear resonant actuator (LRA, vibrator). To expand functionality, the DCM supports daughterboards for additional sensor integration. Safety during wired operation and battery charging is assured through a built-in 5kV USB isolation barrier, enabling safe use even while electrically connected to the wearer.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+<div class="ltx_para" id="S2.p3">
+<p class="ltx_p" id="S2.p3.1">For seamless device pairing and enhanced usability, the DCM employs near-field communication (NFC) technology, allowing users to quickly connect the device to smartphones or other compatible electronics via a simple tap gesture, leveraging Bluetooth connectivity.
+DCM’s design emphasizes flexibility and ergonomics, featuring a slim, conformable form-factor achieved through a carefully optimized flexible PCB substrate. The device can comfortably conform to the forehead or fold into a compact footprint as needed. The core processing component is an ultra-low-power, multi-protocol wireless-enabled microcontroller (nRF52840, Nordic Semiconductors), supporting approximately 5 days of continuous multi-sensor logging with intermittent EEG recordings, or more than 8-10+ hours of continuous EEG recording per charge. A compact 300 mAh coin-cell LiPo battery powers the device, capable of rapid charging from empty to full in approximately 20 minutes.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+<div class="ltx_para" id="S2.p4">
+<p class="ltx_p" id="S2.p4.1">DCM is also economically optimized, with a total bill of materials cost of roughly $180 USD per unit, with substantial cost reductions achievable at scale. The PCB layout has been meticulously refined to require only a standard 6 mil trace/6 mil spacing, 2-layer flexible PCB fabrication process, compatible with affordable prototyping services such as OSHPark.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+<div class="ltx_para" id="S2.p5">
+<p class="ltx_p" id="S2.p5.1">We are committed to fostering open scientific innovation, and the DCM platform will soon be released as open hardware. Board design files created using free and open-source CAD software (KiCAD), along with firmware under permissive licensing, will be freely available via GitHub. Project files will also be accessible through commercial assembly services such as Tindie. Ultimately, DCM aims to democratize access to synchronized multi-modal data acquisition, seamlessly integrating EEG, EMG, ECG, and other biopotential measurements into unified data streams.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+</section>
+<section class="ltx_section" id="S3">
+<h2 class="ltx_title ltx_title_section">
+<span class="ltx_tag ltx_tag_section">III </span><span class="ltx_text ltx_font_smallcaps" id="S3.1.1">Increasing Slow Waves / Slow Wave Sleep with STARS</span>
+</h2><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+<div class="ltx_para" id="S3.p1">
+<p class="ltx_p" id="S3.p1.1">Much of sleep’s restorative nature has been linked to Slow Wave Sleep (SWS), a stage of NREM sleep characterized by large-amplitude low-frequency oscillations observable in the scalp electroencephalogram (EEG) called ‘Slow-Waves’. Slow waves largely occur during the first two sleep cycles and SWS is accompanied by sharp declines in core body temperature after falling asleep <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib25" title="">25</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib26" title="">26</a>]</cite>. Growth hormone is also excreted during SWS <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib27" title="">27</a>]</cite> and reduced SWS is correlated with complaints of non-restorative, shallow sleep <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib28" title="">28</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib29" title="">29</a>]</cite>. It is also widely accepted that SWS plays a role in immune function, memory consolidation, age-related cognitive decline and dementia <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib30" title="">30</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib31" title="">31</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib32" title="">32</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib33" title="">33</a>]</cite>. This may be due in part to the recent discovery that SWS drives the glymphatic system (GS), which facilitates the exchange of cerebrospinal and interstitial fluids in the brain <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib33" title="">33</a>]</cite>. The GS clears metabolic waste from the brain (e.g., amyloid-β) and may regulate neuroinflammation <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib33" title="">33</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib34" title="">34</a>]</cite>. All these reasons make slow waves and SWS a compelling target for optimizing sleep quality.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+<section class="ltx_subsection" id="S3.SS1">
+<h3 class="ltx_title ltx_title_subsection">
+<span class="ltx_tag ltx_tag_subsection"><span class="ltx_text" id="S3.SS1.5.1.1">III-A</span> </span><span class="ltx_text ltx_font_italic" id="S3.SS1.6.2">Acoustic slow-wave stimulation (aSTIM) </span>
+</h3><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+<div class="ltx_para" id="S3.SS1.p1">
+<p class="ltx_p" id="S3.SS1.p1.1">aSTIM is an emerging, non-invasive and scalable technology that boosts the amplitude of slow waves (SWs) and overall Slow Wave Activity (SWA: total power in the 0.4-5hz EEG range) by delivering precisely timed brief (50ms), ‘pink noise’ acoustic stimuli <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib35" title="">35</a>]</cite>. Two recent meta-analyses of 16 studies concluded that aSTIM improved memory consolidation and cognitive performance in adults <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib36" title="">36</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib37" title="">37</a>]</cite>. Moreover, promising work indicates that aSTIM may modulate other SWS-regulated processes, including immune38 and autonomic functions <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib38" title="">38</a>]</cite>. In typical aSTIM protocols, a 50ms burst of ‘pink-noise’ is applied during the UP portion of a slow wave (400ms after threshold crossing), which increases the peak amplitude and area under the curve of the wave. StARS uses a similar protocol.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+</section>
+<section class="ltx_subsection" id="S3.SS2">
+<h3 class="ltx_title ltx_title_subsection">
+<span class="ltx_tag ltx_tag_subsection"><span class="ltx_text" id="S3.SS2.5.1.1">III-B</span> </span><span class="ltx_text ltx_font_italic" id="S3.SS2.6.2">Enhancing slow waves with dynamic bedding temperature yoked to sleep cycle patterns</span>
+</h3><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+<div class="ltx_para" id="S3.SS2.p1">
+<p class="ltx_p" id="S3.SS2.p1.1">Passively timed body cooling is one of the best-studied methods of increasing SWS and SW-density. Sleep onset coincides with the maximal decline in core body temperature (CBT), initiated via heat-loss through the skin <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib39" title="">39</a>]</cite>. Meta-analyses demonstrate that elevating CBT &nbsp;1.64-2.58°C, 2 to 2.5 hours prior to habitual bedtime (achieved by 30 min+ hot baths and/or intense exercise) results in increased SWS and SWA <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib26" title="">26</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib40" title="">40</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib41" title="">41</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib42" title="">42</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib43" title="">43</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib44" title="">44</a>]</cite>. The presumed mechanism is that the spike in CBT augments the normal CBT drop that occurs at sleep onset, which in turn increases SW-production <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib44" title="">44</a>]</cite>. One study suggested that sleeping on a heat-conducting mattress, which lowers CBT by conducting heat from the body, significantly increased SWS by 16% <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib39" title="">39</a>, <a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib45" title="">45</a>]</cite>. This approach has the advantage of requiring limited behavioral change, but lacks the ability to control and optimize the cooling process. Recent technology has developed water-cooled conductive materials, which can control the precise temperature i.e., Active Body Cooling (ABC) of the cooling surface, but they have not previously been integrated with a noninvasive, forehead sticker-encapsulated brain-computer interface to optimally time cooling according to sleep physiology. To our knowledge, StARS is the first system to bridge this gap.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+<div class="ltx_para" id="S3.SS2.p2">
+<p class="ltx_p" id="S3.SS2.p2.1">Thermal modulation protocols aim to guide the body’s natural change in core body temperature when transitioning from wakefulness to deep, slow wave sleep. StARS employs a water-filled mattress pad to quickly change the temperature of the sleeper’s bedding, changing from a neutral temperature at bedtime start, to a cooler temperature at desired times relative to decoded sleep stage dynamics. Traditionally this is done by manually pushing a button to mark bedtime, after which the mattress will initiate cooling at a fixed time delay (ex. 20 minutes after bedtime). Since this does not take into account the sleeper’s state (they may still be awake, for example), there is no guarantee that the timing will work out as intended. Yoking the cooling to our realtime sleep stage decoder provides a guarantee that cooling is initiated and dynamically modulated at the appropriate times, regardless of variability in sleep onset latency.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+</section>
+</section>
+<section class="ltx_section" id="S4">
+<h2 class="ltx_title ltx_title_section">
+<span class="ltx_tag ltx_tag_section">IV </span><span class="ltx_text ltx_font_smallcaps" id="S4.1.1">Summary</span>
+</h2><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+<div class="ltx_para" id="S4.p1">
+<p class="ltx_p" id="S4.p1.1">The StARS system is just one example of the types of sophisticated applications the DCM can support and DCM has already been validated for use in automated sleep stage classifiers <cite class="ltx_cite ltx_citemacro_cite">[<a class="ltx_ref" href="https://arxiv.org/html/2506.03442v2#bib.bib46" title="">46</a>]</cite>. Similarly, acoustic stimulation and environmental control based on accurate real-time knowledge of the sleeper’s ongoing sleep stage dynamics are but two of many possible effector-driven interventions that could be included in the StARS system itself to optimize sleep. With the release of the open-source DCM, we hope to empower the research community with this same type of flexible utility and rapid-prototyping potential to develop the next generation of non-invasive neural interface applications.</p><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+</div>
+</section>
+<section class="ltx_bibliography" id="bib">
+<h2 class="ltx_title ltx_title_bibliography">References</h2><button class="sr-only button" style="display: none;">Report issue for preceding element</button>
+<ul class="ltx_biblist">
+<li class="ltx_bibitem" id="bib.bib1">
+<span class="ltx_tag ltx_tag_bibitem">[1]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+P.&nbsp;M. Krueger and E.&nbsp;M. Friedman, “Sleep duration in the United States: a cross-sectional population-based study,” <em class="ltx_emph ltx_font_italic" id="bib.bib1.1.1">American Journal of Epidemiology</em>, vol. 169, no.&nbsp;9, pp. 1052–1063, 2009.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib2">
+<span class="ltx_tag ltx_tag_bibitem">[2]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+V.&nbsp;Mysliwiec, L.&nbsp;McGraw, R.&nbsp;Pierce, P.&nbsp;Smith, B.&nbsp;Trapp, and B.&nbsp;J. Roth, “Sleep disorders and associated medical comorbidities in active duty military personnel,” <em class="ltx_emph ltx_font_italic" id="bib.bib2.1.1">Sleep</em>, vol.&nbsp;36, no.&nbsp;2, pp. 167–174, 2013.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib3">
+<span class="ltx_tag ltx_tag_bibitem">[3]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+D.&nbsp;D. Luxton, D.&nbsp;Greenburg, J.&nbsp;Ryan, A.&nbsp;Niven, G.&nbsp;Wheeler, and V.&nbsp;Mysliwiec, “Prevalence and impact of short sleep duration in redeployed OIF soldiers,” <em class="ltx_emph ltx_font_italic" id="bib.bib3.1.1">Sleep</em>, vol.&nbsp;34, no.&nbsp;9, pp. 1189–1195, 2011.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib4">
+<span class="ltx_tag ltx_tag_bibitem">[4]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+W.&nbsp;D. Killgore, “Effects of sleep deprivation on cognition,” <em class="ltx_emph ltx_font_italic" id="bib.bib4.1.1">Progress in Brain Research</em>, vol. 185, pp. 105–129, 2010.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib5">
+<span class="ltx_tag ltx_tag_bibitem">[5]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+G.&nbsp;Curcio, M.&nbsp;Ferrara, and L.&nbsp;De&nbsp;Gennaro, “Sleep loss, learning capacity and academic performance,” <em class="ltx_emph ltx_font_italic" id="bib.bib5.1.1">Sleep Medicine Reviews</em>, vol.&nbsp;10, no.&nbsp;5, pp. 323–337, 2006.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib6">
+<span class="ltx_tag ltx_tag_bibitem">[6]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+C.&nbsp;R. Newbury, R.&nbsp;Crowley, K.&nbsp;Rastle, and J.&nbsp;Tamminen, “Sleep deprivation and memory: Meta-analytic reviews of studies on sleep deprivation before and after learning.” <em class="ltx_emph ltx_font_italic" id="bib.bib6.1.1">Psychological Bulletin</em>, vol. 147, no.&nbsp;11, p. 1215, 2021.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib7">
+<span class="ltx_tag ltx_tag_bibitem">[7]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+S.&nbsp;Diekelmann and J.&nbsp;Born, “The memory function of sleep,” <em class="ltx_emph ltx_font_italic" id="bib.bib7.1.1">Nature Reviews Neuroscience</em>, vol.&nbsp;11, no.&nbsp;2, pp. 114–126, 2010.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib8">
+<span class="ltx_tag ltx_tag_bibitem">[8]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+P.&nbsp;A. Bryant, J.&nbsp;Trinder, and N.&nbsp;Curtis, “Sick and tired: does sleep have a vital role in the immune system?” <em class="ltx_emph ltx_font_italic" id="bib.bib8.1.1">Nature Reviews Immunology</em>, vol.&nbsp;4, no.&nbsp;6, pp. 457–467, 2004.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib9">
+<span class="ltx_tag ltx_tag_bibitem">[9]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+L.&nbsp;Xie, H.&nbsp;Kang, Q.&nbsp;Xu, M.&nbsp;J. Chen, Y.&nbsp;Liao, M.&nbsp;Thiyagarajan, J.&nbsp;O’Donnell, D.&nbsp;J. Christensen, C.&nbsp;Nicholson, J.&nbsp;J. Iliff <em class="ltx_emph ltx_font_italic" id="bib.bib9.1.1">et&nbsp;al.</em>, “Sleep drives metabolite clearance from the adult brain,” <em class="ltx_emph ltx_font_italic" id="bib.bib9.2.2">Science</em>, vol. 342, no. 6156, pp. 373–377, 2013.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib10">
+<span class="ltx_tag ltx_tag_bibitem">[10]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+D.&nbsp;E. Rae, T.&nbsp;Chin, K.&nbsp;Dikgomo, L.&nbsp;Hill, A.&nbsp;J. McKune, T.&nbsp;A. Kohn, and L.&nbsp;C. Roden, “One night of partial sleep deprivation impairs recovery from a single exercise training session,” <em class="ltx_emph ltx_font_italic" id="bib.bib10.1.1">European Journal of Applied Physiology</em>, vol. 117, pp. 699–712, 2017.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib11">
+<span class="ltx_tag ltx_tag_bibitem">[11]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+J.&nbsp;M. Mullington, M.&nbsp;Haack, M.&nbsp;Toth, J.&nbsp;M. Serrador, and H.&nbsp;K. Meier-Ewert, “Cardiovascular, inflammatory, and metabolic consequences of sleep deprivation,” <em class="ltx_emph ltx_font_italic" id="bib.bib11.1.1">Progress in Cardiovascular Diseases</em>, vol.&nbsp;51, no.&nbsp;4, pp. 294–302, 2009.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib12">
+<span class="ltx_tag ltx_tag_bibitem">[12]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+K.&nbsp;L. Knutson, K.&nbsp;Spiegel, P.&nbsp;Penev, and E.&nbsp;Van&nbsp;Cauter, “The metabolic consequences of sleep deprivation,” <em class="ltx_emph ltx_font_italic" id="bib.bib12.1.1">Sleep Medicine Reviews</em>, vol.&nbsp;11, no.&nbsp;3, pp. 163–178, 2007.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib13">
+<span class="ltx_tag ltx_tag_bibitem">[13]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+M.&nbsp;K. Scullin and D.&nbsp;L. Bliwise, “Sleep, cognition, and normal aging: integrating a half century of multidisciplinary research,” <em class="ltx_emph ltx_font_italic" id="bib.bib13.1.1">Perspectives on Psychological Science</em>, vol.&nbsp;10, no.&nbsp;1, pp. 97–137, 2015.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib14">
+<span class="ltx_tag ltx_tag_bibitem">[14]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+A.&nbsp;P. Spira, L.&nbsp;P. Chen-Edinboro, M.&nbsp;N. Wu, and K.&nbsp;Yaffe, “Impact of sleep on the risk of cognitive decline and dementia,” <em class="ltx_emph ltx_font_italic" id="bib.bib14.1.1">Current Opinion in Psychiatry</em>, vol.&nbsp;27, no.&nbsp;6, p. 478, 2014.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib15">
+<span class="ltx_tag ltx_tag_bibitem">[15]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+J.&nbsp;A. Piantino, J.&nbsp;J. Iliff, and M.&nbsp;M. Lim, “The bidirectional link between sleep disturbances and traumatic brain injury symptoms: A role for glymphatic dysfunction?” <em class="ltx_emph ltx_font_italic" id="bib.bib15.1.1">Biological Psychiatry</em>, vol.&nbsp;91, no.&nbsp;5, pp. 478–487, 2022.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib16">
+<span class="ltx_tag ltx_tag_bibitem">[16]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+M.&nbsp;E. Peters and C.&nbsp;G. Lyketsos, “The glymphatic system’s role in traumatic brain injury-related neurodegeneration,” <em class="ltx_emph ltx_font_italic" id="bib.bib16.1.1">Molecular Psychiatry</em>, pp. 1–9, 2023.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib17">
+<span class="ltx_tag ltx_tag_bibitem">[17]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+L.&nbsp;M. Hablitz and M.&nbsp;Nedergaard, “The glymphatic system: a novel component of fundamental neurobiology,” <em class="ltx_emph ltx_font_italic" id="bib.bib17.1.1">Journal of Neuroscience</em>, vol.&nbsp;41, no.&nbsp;37, pp. 7698–7711, 2021.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib18">
+<span class="ltx_tag ltx_tag_bibitem">[18]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+E.&nbsp;Van&nbsp;der Helm and M.&nbsp;P. Walker, “Sleep and emotional memory processing,” <em class="ltx_emph ltx_font_italic" id="bib.bib18.1.1">Sleep Medicine Clinics</em>, vol.&nbsp;6, no.&nbsp;1, pp. 31–43, 2011.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib19">
+<span class="ltx_tag ltx_tag_bibitem">[19]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+R.&nbsp;Wassing, O.&nbsp;Lakbila-Kamal, J.&nbsp;R. Ramautar, D.&nbsp;Stoffers, F.&nbsp;Schalkwijk, and E.&nbsp;J. Van&nbsp;Someren, “Restless REM sleep impedes overnight amygdala adaptation,” <em class="ltx_emph ltx_font_italic" id="bib.bib19.1.1">Current Biology</em>, vol.&nbsp;29, no.&nbsp;14, pp. 2351–2358, 2019.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib20">
+<span class="ltx_tag ltx_tag_bibitem">[20]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+Y.-A. Rho, J.&nbsp;Sherfey, and S.&nbsp;Vijayan, “Emotional memory processing during REM sleep with implications for post-traumatic stress disorder,” <em class="ltx_emph ltx_font_italic" id="bib.bib20.1.1">Journal of Neuroscience</em>, vol.&nbsp;43, no.&nbsp;3, pp. 433–446, 2023.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib21">
+<span class="ltx_tag ltx_tag_bibitem">[21]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+T.&nbsp;A. Mellman, V.&nbsp;Bustamante, A.&nbsp;I. Fins, W.&nbsp;R. Pigeon, and B.&nbsp;Nolan, “REM sleep and the early development of posttraumatic stress disorder,” <em class="ltx_emph ltx_font_italic" id="bib.bib21.1.1">American Journal of Psychiatry</em>, vol. 159, no.&nbsp;10, pp. 1696–1701, 2002.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib22">
+<span class="ltx_tag ltx_tag_bibitem">[22]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+A.&nbsp;Lubin, J.&nbsp;Moses, L.&nbsp;Johnson, and P.&nbsp;Naitoh, “The recuperative effects of REM sleep and stage 4 sleep on human performance after complete sleep loss: experiment 1,” <em class="ltx_emph ltx_font_italic" id="bib.bib22.1.1">Psychophysiology</em>, vol.&nbsp;11, no.&nbsp;2, pp. 133–146, 1974.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib23">
+<span class="ltx_tag ltx_tag_bibitem">[23]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+T.&nbsp;Geiser, E.&nbsp;Hertenstein, K.&nbsp;Fehér, J.&nbsp;G. Maier, C.&nbsp;L. Schneider, M.&nbsp;A. Züst, M.&nbsp;Wunderlin, C.&nbsp;Mikutta, S.&nbsp;Klöppel, and C.&nbsp;Nissen, “Targeting arousal and sleep through noninvasive brain stimulation to improve mental health,” <em class="ltx_emph ltx_font_italic" id="bib.bib23.1.1">Neuropsychobiology</em>, vol.&nbsp;79, no. 4-5, pp. 284–292, 2020.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib24">
+<span class="ltx_tag ltx_tag_bibitem">[24]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+W.&nbsp;G. Coon, D.&nbsp;Luna, A.&nbsp;Panagrahi, M.&nbsp;Reid, and M.&nbsp;Ogg, “Getting more from less: Transfer learning improves sleep stage decoding accuracy in peripheral wearable devices,” <em class="ltx_emph ltx_font_italic" id="bib.bib24.1.1">arXiv preprint</em>, 2025. [Online]. Available: <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://arxiv.org/abs/2506.00730" title="">https://arxiv.org/abs/2506.00730</a>
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib25">
+<span class="ltx_tag ltx_tag_bibitem">[25]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+S.&nbsp;S. Campbell and R.&nbsp;J. Broughton, “Rapid decline in body temperature before sleep: fluffing the physiological pillow?” <em class="ltx_emph ltx_font_italic" id="bib.bib25.1.1">Chronobiology international</em>, vol.&nbsp;11, no.&nbsp;2, pp. 126–131, 1994.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib26">
+<span class="ltx_tag ltx_tag_bibitem">[26]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+R.&nbsp;J. Raymann, D.&nbsp;F. Swaab, and E.&nbsp;J. Van&nbsp;Someren, “Skin deep: enhanced sleep depth by cutaneous temperature manipulation,” <em class="ltx_emph ltx_font_italic" id="bib.bib26.1.1">Brain</em>, vol. 131, no.&nbsp;2, pp. 500–513, 2008.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib27">
+<span class="ltx_tag ltx_tag_bibitem">[27]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+J.&nbsp;Born, S.&nbsp;Muth, and H.&nbsp;Fehm, “The significance of sleep onset and slow wave sleep for nocturnal release of growth hormone (gh) and cortisol,” <em class="ltx_emph ltx_font_italic" id="bib.bib27.1.1">Psychoneuroendocrinology</em>, vol.&nbsp;13, no.&nbsp;3, pp. 233–243, 1988.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib28">
+<span class="ltx_tag ltx_tag_bibitem">[28]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+D.-J. Dijk, D.&nbsp;P. Brunner, D.&nbsp;G. Beersma, and A.&nbsp;A. Borbély, “Electroencephalogram power density and slow wave sleep as a function of prior waking and circadian phase,” <em class="ltx_emph ltx_font_italic" id="bib.bib28.1.1">Sleep</em>, vol.&nbsp;13, no.&nbsp;5, pp. 430–440, 1990.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib29">
+<span class="ltx_tag ltx_tag_bibitem">[29]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+M.&nbsp;C. Crenshaw and J.&nbsp;D. Edinger, “Slow-wave sleep and waking cognitive performance among older adults with and without insomnia complaints,” <em class="ltx_emph ltx_font_italic" id="bib.bib29.1.1">Physiology &amp; behavior</em>, vol.&nbsp;66, no.&nbsp;3, pp. 485–492, 1999.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib30">
+<span class="ltx_tag ltx_tag_bibitem">[30]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+M.&nbsp;R. Irwin and M.&nbsp;V. Vitiello, “Implications of sleep disturbance and inflammation for alzheimer’s disease dementia,” <em class="ltx_emph ltx_font_italic" id="bib.bib30.1.1">The Lancet Neurology</em>, vol.&nbsp;18, no.&nbsp;3, pp. 296–306, 2019.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib31">
+<span class="ltx_tag ltx_tag_bibitem">[31]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+J.&nbsp;J. Himali, A.-A. Baril, M.&nbsp;G. Cavuoto, S.&nbsp;Yiallourou, C.&nbsp;D. Wiedner, D.&nbsp;Himali, C.&nbsp;DeCarli, S.&nbsp;Redline, A.&nbsp;S. Beiser, S.&nbsp;Seshadri <em class="ltx_emph ltx_font_italic" id="bib.bib31.1.1">et&nbsp;al.</em>, “Association between slow-wave sleep loss and incident dementia,” <em class="ltx_emph ltx_font_italic" id="bib.bib31.2.2">JAMA neurology</em>, vol.&nbsp;80, no.&nbsp;12, pp. 1326–1333, 2023.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib32">
+<span class="ltx_tag ltx_tag_bibitem">[32]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+G.&nbsp;Girardeau and V.&nbsp;Lopes-Dos-Santos, “Brain neural patterns and the memory function of sleep,” <em class="ltx_emph ltx_font_italic" id="bib.bib32.1.1">Science</em>, vol. 374, no. 6567, pp. 560–564, 2021.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib33">
+<span class="ltx_tag ltx_tag_bibitem">[33]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+M.&nbsp;Nedergaard and S.&nbsp;A. Goldman, “Glymphatic failure as a final common pathway to dementia,” <em class="ltx_emph ltx_font_italic" id="bib.bib33.1.1">Science</em>, vol. 370, no. 6512, pp. 50–56, 2020.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib34">
+<span class="ltx_tag ltx_tag_bibitem">[34]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+P.&nbsp;L. Chong, D.&nbsp;Garic, M.&nbsp;D. Shen, I.&nbsp;Lundgaard, and A.&nbsp;J. Schwichtenberg, “Sleep, cerebrospinal fluid, and the glymphatic system: A systematic review,” <em class="ltx_emph ltx_font_italic" id="bib.bib34.1.1">Sleep medicine reviews</em>, vol.&nbsp;61, p. 101572, 2022.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib35">
+<span class="ltx_tag ltx_tag_bibitem">[35]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+H.-V.&nbsp;V. Ngo, T.&nbsp;Martinetz, J.&nbsp;Born, and M.&nbsp;Mölle, “Auditory closed-loop stimulation of the sleep slow oscillation enhances memory,” <em class="ltx_emph ltx_font_italic" id="bib.bib35.1.1">Neuron</em>, vol.&nbsp;78, no.&nbsp;3, pp. 545–553, 2013.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib36">
+<span class="ltx_tag ltx_tag_bibitem">[36]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+E.&nbsp;C. Stanyer, P.&nbsp;D.&nbsp;E. Baniqued, M.&nbsp;Awais, L.&nbsp;Kouara, A.&nbsp;G. Davies, E.&nbsp;C. Killan, and F.&nbsp;Mushtaq, “The impact of acoustic stimulation during sleep on memory and sleep architecture: A meta-analysis,” <em class="ltx_emph ltx_font_italic" id="bib.bib36.1.1">Journal of Sleep Research</em>, vol.&nbsp;31, no.&nbsp;3, p. e13385, 2022.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib37">
+<span class="ltx_tag ltx_tag_bibitem">[37]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+M.&nbsp;Wunderlin, M.&nbsp;A. Züst, E.&nbsp;Hertenstein, K.&nbsp;D. Fehér, C.&nbsp;L. Schneider, S.&nbsp;Klöppel, and C.&nbsp;Nissen, “Modulating overnight memory consolidation by acoustic stimulation during slow-wave sleep: a systematic review and meta-analysis,” <em class="ltx_emph ltx_font_italic" id="bib.bib37.1.1">Sleep</em>, vol.&nbsp;44, no.&nbsp;7, p. zsaa296, 2021.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib38">
+<span class="ltx_tag ltx_tag_bibitem">[38]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+D.&nbsp;Grimaldi, N.&nbsp;A. Papalambros, K.&nbsp;J. Reid, S.&nbsp;M. Abbott, R.&nbsp;G. Malkani, M.&nbsp;Gendy, M.&nbsp;Iwanaszko, R.&nbsp;I. Braun, D.&nbsp;J. Sanchez, K.&nbsp;A. Paller <em class="ltx_emph ltx_font_italic" id="bib.bib38.1.1">et&nbsp;al.</em>, “Strengthening sleep–autonomic interaction via acoustic enhancement of slow oscillations,” <em class="ltx_emph ltx_font_italic" id="bib.bib38.2.2">Sleep</em>, vol.&nbsp;42, no.&nbsp;5, p. zsz036, 2019.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib39">
+<span class="ltx_tag ltx_tag_bibitem">[39]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+K.&nbsp;Kräuchi, “The thermophysiological cascade leading to sleep initiation in relation to phase of entrainment,” <em class="ltx_emph ltx_font_italic" id="bib.bib39.1.1">Sleep medicine reviews</em>, vol.&nbsp;11, no.&nbsp;6, pp. 439–451, 2007.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib40">
+<span class="ltx_tag ltx_tag_bibitem">[40]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+E.&nbsp;Naylor, P.&nbsp;D. Penev, L.&nbsp;Orbeta, I.&nbsp;Janssen, R.&nbsp;Ortiz, E.&nbsp;F. Colecchia, M.&nbsp;Keng, S.&nbsp;Finkel, and P.&nbsp;C. Zee, “Daily social and physical activity increases slow-wave sleep and daytime neuropsychological performance in the elderly,” <em class="ltx_emph ltx_font_italic" id="bib.bib40.1.1">Sleep</em>, vol.&nbsp;23, no.&nbsp;1, pp. 1–9, 2000.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib41">
+<span class="ltx_tag ltx_tag_bibitem">[41]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+J.&nbsp;Horne, “Exercise benefits for the aging brain depend on the accompanying cognitive load: insights from sleep electroencephalogram,” <em class="ltx_emph ltx_font_italic" id="bib.bib41.1.1">Sleep Medicine</em>, vol.&nbsp;14, no.&nbsp;11, pp. 1208–1213, 2013.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib42">
+<span class="ltx_tag ltx_tag_bibitem">[42]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+Y.&nbsp;Tai, K.&nbsp;Obayashi, Y.&nbsp;Yamagami, K.&nbsp;Yoshimoto, N.&nbsp;Kurumatani, K.&nbsp;Nishio, and K.&nbsp;Saeki, “Hot-water bathing before bedtime and shorter sleep onset latency are accompanied by a higher distal-proximal skin temperature gradient in older adults,” <em class="ltx_emph ltx_font_italic" id="bib.bib42.1.1">Journal of Clinical Sleep Medicine</em>, vol.&nbsp;17, no.&nbsp;6, pp. 1257–1266, 2021.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib43">
+<span class="ltx_tag ltx_tag_bibitem">[43]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+C.&nbsp;M. Dorsey, S.&nbsp;E. Lukas, M.&nbsp;H. Teicher, D.&nbsp;Harper, J.&nbsp;W. Winkelman, S.&nbsp;L. Cunningham, and A.&nbsp;Satlin, “Effects of passive body heating on the sleep of older female insomniacs,” <em class="ltx_emph ltx_font_italic" id="bib.bib43.1.1">Journal of geriatric psychiatry and neurology</em>, vol.&nbsp;9, no.&nbsp;2, pp. 83–90, 1996.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib44">
+<span class="ltx_tag ltx_tag_bibitem">[44]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+D.&nbsp;E. Bunnell, J.&nbsp;A. Agnew, S.&nbsp;M. Horvath, L.&nbsp;Jopson, and M.&nbsp;Wills, “Passive body heating and sleep: influence of proximity to sleep,” <em class="ltx_emph ltx_font_italic" id="bib.bib44.1.1">Sleep</em>, vol.&nbsp;11, no.&nbsp;2, pp. 210–219, 1988.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib45">
+<span class="ltx_tag ltx_tag_bibitem">[45]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+K.&nbsp;Kräuchi, E.&nbsp;Fattori, A.&nbsp;Giordano, M.&nbsp;Falbo, A.&nbsp;Iadarola, F.&nbsp;Aglì, A.&nbsp;Tribolo, R.&nbsp;Mutani, and A.&nbsp;Cicolin, “Sleep on a high heat capacity mattress increases conductive body heat loss and slow wave sleep,” <em class="ltx_emph ltx_font_italic" id="bib.bib45.1.1">Physiology &amp; behavior</em>, vol. 185, pp. 23–30, 2018.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib46">
+<span class="ltx_tag ltx_tag_bibitem">[46]<button class="back-to-reference-btn" aria-label="Back to the article">↑</button></span>
+<span class="ltx_bibblock">
+W.&nbsp;G. Coon, P.&nbsp;Zerr, G.&nbsp;Milsap, N.&nbsp;Sikder, M.&nbsp;Smith, M.&nbsp;Dresler, and M.&nbsp;Reid, “ezscore-f: A Set of Freely Available, Validated Sleep Stage Classifiers for Forehead EEG,” <em class="ltx_emph ltx_font_italic" id="bib.bib46.1.1">bioRxiv</em>, p. 2025.06.02.657451, Jan. 2025. [Online]. Available: <a class="ltx_ref ltx_url ltx_font_typewriter" href="http://biorxiv.org/content/early/2025/06/06/2025.06.02.657451.abstract" title="">http://biorxiv.org/content/early/2025/06/06/2025.06.02.657451.abstract</a>
+</span>
+</li>
+</ul>
+</section><div about="" class="ltx_rdf" content="Will Coon" property="dcterms:creator"></div>
+<div about="" class="ltx_rdf" property="dcterms:subject"></div>
+<div about="" class="ltx_rdf" property="dcterms:subject"></div>
+<div about="" class="ltx_rdf" content="ezsleep" property="dcterms:title"></div>
+</article>
+</div>
+
+</div>
+
+
+<button type="button" class="btn btn-primary hover-rp-button" id="openForm">Report Issue</button><div class="modal" id="myForm" role="dialog" aria-labelledby="modal-title"><div class="modal-dialog"><form class="modal-content" id="myFormContent" enctype="multipart/form-data"><div class="modal-header" id="modal-header"><h5 class="modal-title">Report Github Issue</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><label for="form_title" id="modalTitle">Title:</label><input class="form-control" id="form_title" name="form_title" required="required" placeholder="Enter title"><label for="description" id="selectedTextModalDescription" style="display: none;">Content selection saved. Describe the issue below:</label><label for="description" id="nomralModalDescription">Description:</label><textarea class="form-control" id="description" name="description" required="required" style="height: 80px;" maxlength="500" placeholder="500 characters maximum"></textarea></div><div class="modal-footer d-flex justify-content-end"><button type="submit" class="sr-only button" id="modal-submit-sr">Submit without Github</button><button type="submit" class="btn btn-primary" id="modal-submit">Submit in Github</button></div></form></div></div><button id="small-report-button" type="button" class="btn btn-secondary btn-sm" style="background-color: rgb(179, 27, 27); position: fixed;">Report Issue for Selection</button><div class="ltx_page_footer">
+        <div class="ltx_page_logo">
+            Generated by
+            <a href="https://math.nist.gov/~BMiller/LaTeXML/" class="ltx_LaTeXML_logo">
+                <span style="letter-spacing: -0.2em; margin-right: 0.1em;">
+                    L
+                    <span style="font-size: 70%; position: relative; bottom: 2.2pt;">A</span>
+                    T
+                    <span style="position: relative; bottom: -0.4ex;">E</span>
+                </span>
+                <span class="ltx_font_smallcaps">xml</span>
+                <img alt="[LOGO]" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAOCAYAAAD5YeaVAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKExQZLWTEaOUAAAAddEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIFRoZSBHSU1Q72QlbgAAAdpJREFUKM9tkL+L2nAARz9fPZNCKFapUn8kyI0e4iRHSR1Kb8ng0lJw6FYHFwv2LwhOpcWxTjeUunYqOmqd6hEoRDhtDWdA8ApRYsSUCDHNt5ul13vz4w0vWCgUnnEc975arX6ORqN3VqtVZbfbTQC4uEHANM3jSqXymFI6yWazP2KxWAXAL9zCUa1Wy2tXVxheKA9YNoR8Pt+aTqe4FVVVvz05O6MBhqUIBGk8Hn8HAOVy+T+XLJfLS4ZhTiRJgqIoVBRFIoric47jPnmeB1mW/9rr9ZpSSn3Lsmir1fJZlqWlUonKsvwWwD8ymc/nXwVBeLjf7xEKhdBut9Hr9WgmkyGEkJwsy5eHG5vN5g0AKIoCAEgkEkin0wQAfN9/cXPdheu6P33fBwB4ngcAcByHJpPJl+fn54mD3Gg0NrquXxeLRQAAwzAYj8cwTZPwPH9/sVg8PXweDAauqqr2cDjEer1GJBLBZDJBs9mE4zjwfZ85lAGg2+06hmGgXq+j3+/DsixYlgVN03a9Xu8jgCNCyIegIAgx13Vfd7vdu+FweG8YRkjXdWy329+dTgeSJD3ieZ7RNO0VAXAPwDEAO5VKndi2fWrb9jWl9Esul6PZbDY9Go1OZ7PZ9z/lyuD3OozU2wAAAABJRU5ErkJggg==">
+            </a>
+        </div></div><footer id="footer" class="ltx_document">
+        <div class="keyboard-glossary">
+            <h2>Instructions for reporting errors</h2>
+            <p>We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the methods listed below:</p>
+            <ul>
+                <li>Click the "Report Issue" button.</li>
+                <li>Open a report feedback form via keyboard, use "<strong>Ctrl + ?</strong>".</li>
+                <li>Make a text selection and click the "Report Issue for Selection" button near your cursor.</li>
+                <li class="sr-only">You can use Alt+Y to toggle on and Alt+Shift+Y to toggle off accessible reporting links at each section.</li>
+            </ul>
+            <p>Our team has already identified <a class="ltx_ref" href="https://github.com/arXiv/html_feedback/issues" target="_blank">the following issues</a>. We appreciate your time reviewing and reporting rendering errors we may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability should not be a barrier to accessing research. Thank you for your continued support in championing open access for all.</p>
+            <p>Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a <a class="ltx_ref" href="https://github.com/brucemiller/LaTeXML/wiki/Porting-LaTeX-packages-for-LaTeXML" target="_blank">list of packages that need conversion</a>, and welcome <a class="ltx_ref" href="https://github.com/brucemiller/LaTeXML/issues" target="_blank">developer contributions</a>.</p>
+        </div>
+    </footer></body></html>
