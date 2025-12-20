@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		CB6DF12A2EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = CB6DF1232EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CB6DF12B2EF6BC7F0019840D /* DreamWeaver WatchKit App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CB6DF1222EF6BC7F0019840D /* DreamWeaver WatchKit App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		CB6DEA6C2EF6AAAC0019840D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -37,10 +42,30 @@
 		};
 /* End PBXContainerItemProxy section */
 
-/* Begin PBXBuildFile section */
-		CB6DF12A2EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = CB6DF1232EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		CB6DF12B2EF6BC7F0019840D /* DreamWeaver WatchKit App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CB6DF1222EF6BC7F0019840D /* DreamWeaver WatchKit App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-/* End PBXBuildFile section */
+/* Begin PBXCopyFilesBuildPhase section */
+		CB6DF1252EF6BC7F0019840D /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CB6DF12A2EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CB6DF1292EF6BC7F0019840D /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CB6DF12B2EF6BC7F0019840D /* DreamWeaver WatchKit App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		CB6DEA5C2EF6AAAA0019840D /* DreamWeaver.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DreamWeaver.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -118,31 +143,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		CB6DF1252EF6BC7F0019840D /* Embed App Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				CB6DF12A2EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex in Embed App Extensions */,
-			);
-			name = "Embed App Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		CB6DF1292EF6BC7F0019840D /* Embed Watch Content */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				CB6DF12B2EF6BC7F0019840D /* DreamWeaver WatchKit App.app in Embed Watch Content */,
-			);
-			name = "Embed Watch Content";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXGroup section */
 		CB6DEA532EF6AAAA0019840D = {
@@ -258,8 +258,6 @@
 			);
 			dependencies = (
 				CB6DF12E2EF6BC7F0019840D /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
 			);
 			name = "DreamWeaver WatchKit App";
 			productName = "DreamWeaver WatchKit App";
@@ -750,7 +748,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 28TCC8Y78C;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "../../Iwatch/WatchExtension-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -780,7 +779,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 28TCC8Y78C;
 				ENABLE_PREVIEWS = NO;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "../../Iwatch/WatchExtension-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
