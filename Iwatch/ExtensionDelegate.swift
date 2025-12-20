@@ -5,6 +5,7 @@ final class ExtensionDelegate: NSObject, WKExtensionDelegate {
 
     override init() {
         super.init()
+        _ = WatchSideConnectivityManager.shared
         ExtensionDelegate.shared = self
     }
 
@@ -25,6 +26,27 @@ final class ExtensionDelegate: NSObject, WKExtensionDelegate {
     func applicationWillResignActive() {
         Task { @MainActor in
             WatchSideConnectivityManager.shared.sendConnectionState(.inactive)
+        }
+    }
+
+    @MainActor
+    func handle(_ backgroundTasks: Set<WKRefreshBackgroundTask>) {
+        for task in backgroundTasks {
+            switch task {
+            case let wcTask as WKWatchConnectivityRefreshBackgroundTask:
+                processPendingCommands()
+                let connectionState: WatchSideConnectivityManager.ConnectionState = WorkoutManager.shared.isTracking ? .tracking : .ready
+                WatchSideConnectivityManager.shared.sendConnectionState(connectionState)
+                wcTask.setTaskCompletedWithSnapshot(false)
+            case let appTask as WKApplicationRefreshBackgroundTask:
+                appTask.setTaskCompletedWithSnapshot(false)
+            case let snapshotTask as WKSnapshotRefreshBackgroundTask:
+                snapshotTask.setTaskCompleted(restoredDefaultState: true, estimatedSnapshotExpiration: .distantFuture, userInfo: nil)
+            case let urlTask as WKURLSessionRefreshBackgroundTask:
+                urlTask.setTaskCompletedWithSnapshot(false)
+            default:
+                task.setTaskCompletedWithSnapshot(false)
+            }
         }
     }
 

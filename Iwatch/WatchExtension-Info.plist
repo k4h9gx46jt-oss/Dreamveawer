@@ -40,5 +40,11 @@
 	<array>
 		<integer>4</integer>
 	</array>
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>connectivity</string>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
 </dict>
 </plist>
