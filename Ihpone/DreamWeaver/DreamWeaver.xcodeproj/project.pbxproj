@@ -21,12 +21,33 @@
 			remoteGlobalIDString = CB6DEA5B2EF6AAAA0019840D;
 			remoteInfo = DreamWeaver;
 		};
+		CB6DF12C2EF6BC7F0019840D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CB6DEA542EF6AAAA0019840D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CB6DF1212EF6BC7F0019840D;
+			remoteInfo = "DreamWeaver WatchKit Extension";
+		};
+		CB6DF12D2EF6BC7F0019840D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CB6DEA542EF6AAAA0019840D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CB6DF1202EF6BC7F0019840D;
+			remoteInfo = "DreamWeaver WatchKit App";
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXBuildFile section */
+		CB6DF12A2EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = CB6DF1232EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CB6DF12B2EF6BC7F0019840D /* DreamWeaver WatchKit App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CB6DF1222EF6BC7F0019840D /* DreamWeaver WatchKit App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		CB6DEA5C2EF6AAAA0019840D /* DreamWeaver.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DreamWeaver.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CB6DEA6B2EF6AAAC0019840D /* DreamWeaverTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DreamWeaverTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CB6DEA752EF6AAAC0019840D /* DreamWeaverUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DreamWeaverUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CB6DF1222EF6BC7F0019840D /* DreamWeaver WatchKit App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "DreamWeaver WatchKit App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		CB6DF1232EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "DreamWeaver WatchKit Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -60,6 +81,11 @@
 			path = ../Views;
 			sourceTree = "<group>";
 		};
+		CB6DF1102EF6BC7F0019840D /* ../../Iwatch */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ../../Iwatch;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -84,7 +110,39 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CB6DF1272EF6BC7F0019840D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CB6DF1252EF6BC7F0019840D /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CB6DF12A2EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CB6DF1292EF6BC7F0019840D /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CB6DF12B2EF6BC7F0019840D /* DreamWeaver WatchKit App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXGroup section */
 		CB6DEA532EF6AAAA0019840D = {
@@ -94,6 +152,7 @@
 				CB6DF1002EF6B1230019840D /* ../Models */,
 				CB6DF1012EF6B1230019840D /* ../Services */,
 				CB6DF1022EF6B1230019840D /* ../Views */,
+				CB6DF1102EF6BC7F0019840D /* ../../Iwatch */,
 				CB6DEA6E2EF6AAAC0019840D /* DreamWeaverTests */,
 				CB6DEA782EF6AAAC0019840D /* DreamWeaverUITests */,
 				CB6DEA5D2EF6AAAA0019840D /* Products */,
@@ -106,6 +165,8 @@
 				CB6DEA5C2EF6AAAA0019840D /* DreamWeaver.app */,
 				CB6DEA6B2EF6AAAC0019840D /* DreamWeaverTests.xctest */,
 				CB6DEA752EF6AAAC0019840D /* DreamWeaverUITests.xctest */,
+				CB6DF1222EF6BC7F0019840D /* DreamWeaver WatchKit App.app */,
+				CB6DF1232EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -120,10 +181,12 @@
 				CB6DEA582EF6AAAA0019840D /* Sources */,
 				CB6DEA592EF6AAAA0019840D /* Frameworks */,
 				CB6DEA5A2EF6AAAA0019840D /* Resources */,
+				CB6DF1292EF6BC7F0019840D /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				CB6DF12F2EF6BC7F0019840D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				CB6DEA5E2EF6AAAA0019840D /* DreamWeaver */,
@@ -184,6 +247,45 @@
 			productReference = CB6DEA752EF6AAAC0019840D /* DreamWeaverUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		CB6DF1202EF6BC7F0019840D /* DreamWeaver WatchKit App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CB6DF1642EF6BC7F0019840D /* Build configuration list for PBXNativeTarget "DreamWeaver WatchKit App" */;
+			buildPhases = (
+				CB6DF1242EF6BC7F0019840D /* Resources */,
+				CB6DF1252EF6BC7F0019840D /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CB6DF12E2EF6BC7F0019840D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+			);
+			name = "DreamWeaver WatchKit App";
+			productName = "DreamWeaver WatchKit App";
+			productReference = CB6DF1222EF6BC7F0019840D /* DreamWeaver WatchKit App.app */;
+			productType = "com.apple.product-type.application.watchapp2";
+		};
+		CB6DF1212EF6BC7F0019840D /* DreamWeaver WatchKit Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CB6DF1652EF6BC7F0019840D /* Build configuration list for PBXNativeTarget "DreamWeaver WatchKit Extension" */;
+			buildPhases = (
+				CB6DF1262EF6BC7F0019840D /* Sources */,
+				CB6DF1272EF6BC7F0019840D /* Frameworks */,
+				CB6DF1282EF6BC7F0019840D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CB6DF1102EF6BC7F0019840D /* ../../Iwatch */,
+			);
+			name = "DreamWeaver WatchKit Extension";
+			productName = "DreamWeaver WatchKit Extension";
+			productReference = CB6DF1232EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex */;
+			productType = "com.apple.product-type.watchkit2-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -205,6 +307,14 @@
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = CB6DEA5B2EF6AAAA0019840D;
 					};
+					CB6DF1202EF6BC7F0019840D = {
+						CreatedOnToolsVersion = 26.2;
+						ProvisioningStyle = Automatic;
+					};
+					CB6DF1212EF6BC7F0019840D = {
+						CreatedOnToolsVersion = 26.2;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = CB6DEA572EF6AAAA0019840D /* Build configuration list for PBXProject "DreamWeaver" */;
@@ -222,6 +332,8 @@
 			projectRoot = "";
 			targets = (
 				CB6DEA5B2EF6AAAA0019840D /* DreamWeaver */,
+				CB6DF1212EF6BC7F0019840D /* DreamWeaver WatchKit Extension */,
+				CB6DF1202EF6BC7F0019840D /* DreamWeaver WatchKit App */,
 				CB6DEA6A2EF6AAAC0019840D /* DreamWeaverTests */,
 				CB6DEA742EF6AAAC0019840D /* DreamWeaverUITests */,
 			);
@@ -244,6 +356,20 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		CB6DEA732EF6AAAC0019840D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CB6DF1242EF6BC7F0019840D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CB6DF1282EF6BC7F0019840D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -274,6 +400,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CB6DF1262EF6BC7F0019840D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -286,6 +419,16 @@
 			isa = PBXTargetDependency;
 			target = CB6DEA5B2EF6AAAA0019840D /* DreamWeaver */;
 			targetProxy = CB6DEA762EF6AAAC0019840D /* PBXContainerItemProxy */;
+		};
+		CB6DF12E2EF6BC7F0019840D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CB6DF1212EF6BC7F0019840D /* DreamWeaver WatchKit Extension */;
+			targetProxy = CB6DF12C2EF6BC7F0019840D /* PBXContainerItemProxy */;
+		};
+		CB6DF12F2EF6BC7F0019840D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CB6DF1202EF6BC7F0019840D /* DreamWeaver WatchKit App */;
+			targetProxy = CB6DF12D2EF6BC7F0019840D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -559,6 +702,106 @@
 			};
 			name = Release;
 		};
+		CB6DF1602EF6BC7F0019840D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 28TCC8Y78C;
+				GENERATE_INFOPLIST_FILE = YES;
+				IBSC_MODULE = DreamWeaver_WatchKit_Extension;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = GJDRW.DreamWeaver;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = GJDRW.DreamWeaver.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Debug;
+		};
+		CB6DF1612EF6BC7F0019840D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 28TCC8Y78C;
+				GENERATE_INFOPLIST_FILE = YES;
+				IBSC_MODULE = DreamWeaver_WatchKit_Extension;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = GJDRW.DreamWeaver;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = GJDRW.DreamWeaver.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Release;
+		};
+		CB6DF1622EF6BC7F0019840D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 28TCC8Y78C;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = GJDRW.DreamWeaver.watchkitapp.watchkitextension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+				WK_APP_BUNDLE_IDENTIFIER = GJDRW.DreamWeaver.watchkitapp;
+			};
+			name = Debug;
+		};
+		CB6DF1632EF6BC7F0019840D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 28TCC8Y78C;
+				ENABLE_PREVIEWS = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = GJDRW.DreamWeaver.watchkitapp.watchkitextension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+				WK_APP_BUNDLE_IDENTIFIER = GJDRW.DreamWeaver.watchkitapp;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -594,6 +837,24 @@
 			buildConfigurations = (
 				CB6DEA862EF6AAAC0019840D /* Debug */,
 				CB6DEA872EF6AAAC0019840D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CB6DF1642EF6BC7F0019840D /* Build configuration list for PBXNativeTarget "DreamWeaver WatchKit App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CB6DF1602EF6BC7F0019840D /* Debug */,
+				CB6DF1612EF6BC7F0019840D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CB6DF1652EF6BC7F0019840D /* Build configuration list for PBXNativeTarget "DreamWeaver WatchKit Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CB6DF1622EF6BC7F0019840D /* Debug */,
+				CB6DF1632EF6BC7F0019840D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

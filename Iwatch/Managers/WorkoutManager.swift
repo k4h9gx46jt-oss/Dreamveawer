@@ -67,7 +67,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let typesToRead: Set = [HKObjectType.quantityType(forIdentifier: .heartRate)!,
                                 HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!]
-        try await healthStore.requestAuthorization(toShare: nil, read: typesToRead)
+        try await healthStore.requestAuthorization(toShare: [], read: typesToRead)
     }
 }
 
