@@ -7,58 +7,110 @@ struct DreamDashboardView: View {
     let dreamTapped: (SleepData) -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                heroCard
-                if let dream = lastDream {
-                    LastDreamCard(dream: dream) {
-                        dreamTapped(dream)
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.95, green: 0.88, blue: 1.0),
+                    Color(red: 0.92, green: 0.80, blue: 1.0),
+                    Color(red: 0.84, green: 0.72, blue: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    header
+                    heroCard
+
+                    if let dream = lastDream {
+                        LastDreamCard(dream: dream) {
+                            dreamTapped(dream)
+                        }
                     }
-                }
-                Text("Dream History")
-                    .font(.title3.bold())
+
+                    Text("Dream History")
+                        .font(.title3.bold())
+                        .padding(.horizontal)
+
+                    VStack(spacing: 12) {
+                        ForEach(history) { dream in
+                            DreamHistoryRow(dream: dream)
+                                .onTapGesture { dreamTapped(dream) }
+                        }
+                    }
                     .padding(.horizontal)
-                VStack(spacing: 12) {
-                    ForEach(history) { dream in
-                        DreamHistoryRow(dream: dream)
-                            .onTapGesture { dreamTapped(dream) }
-                    }
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal)
+                .padding(.top, 32)
             }
-            .padding(.vertical)
         }
-        .background(Color(.systemGroupedBackground))
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("DreamWeaver")
+                .font(.system(size: 34, weight: .bold, design: .default))
+                .foregroundStyle(.black)
+                .padding(.horizontal)
+
+            VStack(spacing: 8) {
+                Image(systemName: "moon.stars.fill")
+                    .font(.system(size: 56))
+                    .foregroundStyle(Color(red: 1.0, green: 0.82, blue: 0.20))
+                Text("See What Your Mind Creates")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+            .frame(maxWidth: .infinity)
+        }
     }
 
     private var heroCard: some View {
-        ZStack(alignment: .leading) {
-            LinearGradient(colors: [Color(hex: 0x7F7FD5), Color(hex: 0x86A8E7), Color(hex: 0x91EAE4)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                .cornerRadius(30)
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Start Dream Mode", systemImage: "bed.double.fill")
-                    .font(.title2.bold())
-                    .foregroundStyle(.white)
-                Text("Track your sleep and visualize your dreams")
-                    .foregroundStyle(.white.opacity(0.9))
-                Button(action: startTapped) {
-                    HStack {
-                        Text("Begin" )
-                            .fontWeight(.semibold)
-                        Image(systemName: "arrow.right.circle.fill")
+        Button(action: startTapped) {
+            HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bed.double.fill")
+                            .font(.title2)
+                        Text("Start Dream Mode")
+                            .font(.title2.bold())
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(.white.opacity(0.2))
-                    .clipShape(Capsule())
                     .foregroundStyle(.white)
+
+                    Text("Track your sleep and visualize\nyour dreams")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.2))
+                        .frame(width: 52, height: 52)
+                    Image(systemName: "chevron.right")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.white)
                 }
             }
-            .padding(30)
+            .padding(24)
+            .frame(maxWidth: .infinity)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.25, green: 0.53, blue: 1.0),
+                        Color(red: 0.63, green: 0.37, blue: 1.0)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
         }
+        .buttonStyle(.plain)
         .padding(.horizontal)
-        .frame(maxWidth: .infinity)
-        .frame(height: 220)
     }
 }
 
