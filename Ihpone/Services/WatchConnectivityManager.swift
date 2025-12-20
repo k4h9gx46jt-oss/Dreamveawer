@@ -1,6 +1,9 @@
 import Foundation
 import Combine
 import WatchConnectivity
+#if os(iOS)
+import UIKit
+#endif
 
 @MainActor
 final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
@@ -46,6 +49,21 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     func stopSleepSession(id: UUID) {
         guard WCSession.default.isReachable else { return }
         WCSession.default.sendMessage(["command": "stopSleep", "sessionId": id.uuidString], replyHandler: nil)
+    }
+
+    func attemptReconnect() {
+        guard let session else { return }
+        session.activate()
+        refreshReachability(using: session)
+        requestConnectionPing()
+    }
+
+    func openWatchAppSettings() {
+        #if os(iOS)
+        if let url = URL(string: "itms-watchs://"), UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+        }
+        #endif
     }
 }
 

@@ -11,6 +11,7 @@ struct SleepTrackingView: View {
     @State private var session = SleepSession()
     @State private var aiResult: SleepAIResult?
     @State private var remoteControlled = false
+    @State private var showingConnectionHelp = false
 
     private let formatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
@@ -22,18 +23,7 @@ struct SleepTrackingView: View {
 
     var body: some View {
         VStack(spacing: 24) {
-            RoundedRectangle(cornerRadius: 24)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    VStack(spacing: 16) {
-                        Label(connectivity.isWatchReachable ? "⌚ Watch Connected" : "⌚ Watch Unavailable", systemImage: connectivity.isWatchReachable ? "checkmark.circle.fill" : "exclamationmark.triangle")
-                            .foregroundStyle(connectivity.isWatchReachable ? .green : .orange)
-                        Text(formatter.string(from: elapsed) ?? "00:00:00")
-                            .font(.system(size: 48, weight: .semibold, design: .rounded))
-                    }
-                        .padding()
-                )
-                .frame(height: 170)
+            connectionStatusCard
 
             HStack(spacing: 20) {
                 metricCard(title: "Heart", value: "\(Int(connectivity.liveHeartRate)) bpm", icon: "heart.fill", color: .pink)
@@ -74,6 +64,17 @@ struct SleepTrackingView: View {
         .onReceive(connectivity.$remoteSessionEndedAt) { end in
             guard let end, isTracking, remoteControlled else { return }
             stopTracking(triggeredByRemote: true, endDate: end)
+        }
+        .confirmationDialog("Apple Watch Connection", isPresented: $showingConnectionHelp, titleVisibility: .visible) {
+            Button("Retry Connection") {
+                connectivity.attemptReconnect()
+            }
+            Button("Open Watch App") {
+                connectivity.openWatchAppSettings()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Make sure your Apple Watch is nearby, unlocked, and the DreamWeaver watch app is installed.")
         }
     }
 
@@ -146,6 +147,33 @@ struct SleepTrackingView: View {
 }
 
 private extension SleepTrackingView {
+    var connectionStatusCard: some View {
+        RoundedRectangle(cornerRadius: 24)
+            .fill(.ultraThinMaterial)
+            .overlay(
+                VStack(spacing: 12) {
+                    Label(connectivity.isWatchReachable ? "⌚ Watch Connected" : "⌚ Watch Unavailable", systemImage: connectivity.isWatchReachable ? "checkmark.circle.fill" : "exclamationmark.triangle")
+                        .foregroundStyle(connectivity.isWatchReachable ? .green : .orange)
+                        .animation(.easeInOut, value: connectivity.isWatchReachable)
+                    Text(formatter.string(from: elapsed) ?? "00:00:00")
+                        .font(.system(size: 48, weight: .semibold, design: .rounded))
+                    Text(connectivity.isWatchReachable ? "Live connection ready" : "Tap to test the connection or open the Watch app to finish setup.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                }
+                    .padding()
+            )
+            .frame(height: 190)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !connectivity.isWatchReachable else { return }
+                connectivity.attemptReconnect()
+                showingConnectionHelp = true
+            }
+    }
+
     var sleepChart: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("@sleepingchart")
