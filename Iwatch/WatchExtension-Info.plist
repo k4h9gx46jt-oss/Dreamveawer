@@ -32,6 +32,10 @@
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).ExtensionDelegate</string>
 	</dict>
+	<key>NSHealthShareUsageDescription</key>
+	<string>DreamWeaver reads your heart rate and HRV to keep Dream Mode metrics live.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>DreamWeaver writes workout session data so your dream history stays in sync.</string>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>4</integer>
