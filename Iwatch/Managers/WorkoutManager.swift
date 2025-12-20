@@ -4,6 +4,8 @@ import Combine
 
 @MainActor
 final class WorkoutManager: NSObject, ObservableObject {
+    static let shared = WorkoutManager()
+
     @Published var isTracking = false
     @Published var currentHeartRate: Double = 0
     @Published var currentHRV: Double = 0
@@ -28,13 +30,12 @@ final class WorkoutManager: NSObject, ObservableObject {
         static let sessionId = "dw.watch.sessionId"
     }
 
-    override init() {
+    private override init() {
         super.init()
-        NotificationCenter.default.addObserver(self, selector: #selector(handleCommand(_:)), name: .watchCommand, object: nil)
         restorePersistedSessionIfNeeded()
     }
 
-    func start() {
+    func start(remoteSessionId: UUID? = nil) {
         guard !isTracking else { return }
         Task { try? await requestAuthorization() }
         configureWorkout()
@@ -42,7 +43,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         samples.removeAll()
         remWindows.removeAll()
         currentREMState = .light
-        sessionId = UUID()
+        sessionId = remoteSessionId ?? UUID()
         sessionStartDate = Date()
         isTracking = true
         startElapsedTimer()
@@ -267,17 +268,6 @@ private extension WorkoutManager {
         }
     }
 
-    @objc func handleCommand(_ notification: Notification) {
-        guard let command = notification.userInfo?["command"] as? String else { return }
-        switch command {
-        case "startSleep":
-            start()
-        case "stopSleep":
-            stop()
-        default:
-            break
-        }
-    }
 }
 
 struct WatchSleepSample: Identifiable, Codable {

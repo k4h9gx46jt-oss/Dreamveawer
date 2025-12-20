@@ -1,10 +1,6 @@
 import Foundation
 import WatchConnectivity
 
-extension Notification.Name {
-    static let watchCommand = Notification.Name("WatchConnectivityCommand")
-}
-
 @MainActor
 final class WatchSideConnectivityManager: NSObject, ObservableObject {
     enum ConnectionState: String {
@@ -16,6 +12,9 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
     static let shared = WatchSideConnectivityManager()
     @Published var lastCommand: String = ""
     @Published private(set) var currentState: ConnectionState = .inactive
+    private var processedCommandTokens: [String] = []
+    private var processedCommandTokenSet: Set<String> = []
+    private let maxCommandTokensStored = 20
 
     private override init() {
         super.init()
@@ -107,16 +106,38 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
         routeIncomingCommand(applicationContext)
     }
 
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String : Any]) {
+        routeIncomingCommand(userInfo)
+    }
+
     private nonisolated func routeIncomingCommand(_ payload: [String: Any]) {
-        guard let command = payload["command"] as? String else { return }
         Task { @MainActor in
+            guard let command = payload["command"] as? String else { return }
+            guard shouldProcessCommand(payload) else { return }
             lastCommand = command
             if command == "ping" {
                 sendConnectionState(currentState == .inactive ? .ready : currentState)
-            } else {
-                NotificationCenter.default.post(name: .watchCommand, object: nil, userInfo: ["command": command])
+            } else if let delegate = ExtensionDelegate.shared {
+                delegate.handleRemoteCommandPayload(payload)
+            } else if let remoteCommand = RemoteCommand(payload: payload) {
+                RemoteCommandStore.shared.enqueue(remoteCommand)
             }
         }
+    }
+
+    private func shouldProcessCommand(_ payload: [String: Any]) -> Bool {
+        guard let token = payload["commandToken"] as? String else { return true }
+        if processedCommandTokenSet.contains(token) {
+            return false
+        }
+        processedCommandTokens.append(token)
+        processedCommandTokenSet.insert(token)
+        if processedCommandTokens.count > maxCommandTokensStored,
+           let removed = processedCommandTokens.first {
+            processedCommandTokens.removeFirst()
+            processedCommandTokenSet.remove(removed)
+        }
+        return true
     }
 }
 

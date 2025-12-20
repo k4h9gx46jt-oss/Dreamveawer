@@ -127,15 +127,13 @@ private extension PhoneWatchConnectivityManager {
         var payload = extras
         payload["command"] = command
         payload["timestamp"] = Date().timeIntervalSince1970
+        payload["commandToken"] = UUID().uuidString
         if session.isReachable {
-            session.sendMessage(payload, replyHandler: nil, errorHandler: nil)
-        } else {
-            do {
-                try session.updateApplicationContext(payload)
-            } catch {
-                print("Failed to update application context: \(error.localizedDescription)")
+            session.sendMessage(payload, replyHandler: nil) { error in
+                print("Watch command send failed: \(error.localizedDescription)")
             }
         }
+        enqueueCommandPayload(payload, using: session)
     }
 
     func requestConnectionPing() {
@@ -149,6 +147,18 @@ private extension PhoneWatchConnectivityManager {
         sleepSamples = []
         remWindows = []
         currentREMStart = nil
+    }
+
+    func enqueueCommandPayload(_ payload: [String: Any], using session: WCSession) {
+        if session.activationState == .activated {
+            session.transferUserInfo(payload)
+        } else {
+            do {
+                try session.updateApplicationContext(payload)
+            } catch {
+                print("Failed to enqueue command payload: \(error.localizedDescription)")
+            }
+        }
     }
 
     func process(message: [String: Any], from session: WCSession) {
@@ -198,8 +208,7 @@ private extension PhoneWatchConnectivityManager {
                 remoteSessionEndedAt = nil
             }
         case "sleepEnd":
-            if let endInterval = payload["end"] as? Double,
-               let startInterval = payload["start"] as? Double {
+            if let endInterval = payload["end"] as? Double {
                 let endDate = Date(timeIntervalSince1970: endInterval)
                 finalizeREMWindow(until: endDate)
                 if let list = payload["samples"] as? [[String: Double]] {

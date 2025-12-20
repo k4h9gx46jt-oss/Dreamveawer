@@ -1,11 +1,62 @@
 import WatchKit
 
 final class ExtensionDelegate: NSObject, WKExtensionDelegate {
+    static private(set) var shared: ExtensionDelegate?
+
+    override init() {
+        super.init()
+        ExtensionDelegate.shared = self
+    }
+
+    func applicationDidFinishLaunching() {
+        Task { @MainActor in
+            WatchSideConnectivityManager.shared.sendConnectionState(.ready)
+            processPendingCommands()
+        }
+    }
+
     func applicationDidBecomeActive() {
-        Task { await WatchSideConnectivityManager.shared.sendConnectionState(.ready) }
+        Task { @MainActor in
+            WatchSideConnectivityManager.shared.sendConnectionState(.ready)
+            processPendingCommands()
+        }
     }
 
     func applicationWillResignActive() {
-        Task { await WatchSideConnectivityManager.shared.sendConnectionState(.inactive) }
+        Task { @MainActor in
+            WatchSideConnectivityManager.shared.sendConnectionState(.inactive)
+        }
+    }
+
+    @MainActor
+    func handleRemoteCommandPayload(_ payload: [String: Any]) {
+        guard let command = RemoteCommand(payload: payload) else { return }
+        RemoteCommandStore.shared.enqueue(command)
+        processPendingCommands()
+    }
+
+    @MainActor
+    private func processPendingCommands() {
+        var didProcess = false
+        while let command = RemoteCommandStore.shared.popNext() {
+            didProcess = true
+            execute(command)
+        }
+        if didProcess {
+            let state: WatchSideConnectivityManager.ConnectionState = WorkoutManager.shared.isTracking ? .tracking : .ready
+            WatchSideConnectivityManager.shared.sendConnectionState(state)
+        }
+    }
+
+    @MainActor
+    private func execute(_ command: RemoteCommand) {
+        switch command.command {
+        case "startSleep":
+            WorkoutManager.shared.start(remoteSessionId: command.sessionId)
+        case "stopSleep":
+            WorkoutManager.shared.stop()
+        default:
+            break
+        }
     }
 }
