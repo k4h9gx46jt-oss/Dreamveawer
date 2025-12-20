@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "Designer.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -12,6 +13,7 @@
           "value" : "dark"
         }
       ],
+      "filename" : "Designer.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -23,9 +25,96 @@
           "value" : "tinted"
         }
       ],
+      "filename" : "Designer.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
+    },
+    {
+      "filename" : "Designer.png",
+      "idiom" : "watch-marketing",
+      "platform" : "watchos",
+      "size" : "1024x1024"
+    },
+    {
+      "filename" : "Designer-48.png",
+      "idiom" : "watch",
+      "role" : "notificationCenter",
+      "size" : "24x24",
+      "scale" : "2x",
+      "subtype" : "38mm"
+    },
+    {
+      "filename" : "Designer-55.png",
+      "idiom" : "watch",
+      "role" : "notificationCenter",
+      "size" : "27.5x27.5",
+      "scale" : "2x",
+      "subtype" : "42mm"
+    },
+    {
+      "filename" : "Designer-58.png",
+      "idiom" : "watch",
+      "role" : "notificationCenter",
+      "size" : "29x29",
+      "scale" : "2x",
+      "subtype" : "45mm"
+    },
+    {
+      "filename" : "Designer-66.png",
+      "idiom" : "watch",
+      "role" : "appLauncher",
+      "size" : "33x33",
+      "scale" : "2x",
+      "subtype" : "38mm"
+    },
+    {
+      "filename" : "Designer-80.png",
+      "idiom" : "watch",
+      "role" : "appLauncher",
+      "size" : "40x40",
+      "scale" : "2x",
+      "subtype" : "42mm"
+    },
+    {
+      "filename" : "Designer-92.png",
+      "idiom" : "watch",
+      "role" : "appLauncher",
+      "size" : "46x46",
+      "scale" : "2x",
+      "subtype" : "44mm"
+    },
+    {
+      "filename" : "Designer-102.png",
+      "idiom" : "watch",
+      "role" : "appLauncher",
+      "size" : "51x51",
+      "scale" : "2x",
+      "subtype" : "45mm"
+    },
+    {
+      "filename" : "Designer-172.png",
+      "idiom" : "watch",
+      "role" : "quickLook",
+      "size" : "86x86",
+      "scale" : "2x",
+      "subtype" : "42mm"
+    },
+    {
+      "filename" : "Designer-196.png",
+      "idiom" : "watch",
+      "role" : "quickLook",
+      "size" : "98x98",
+      "scale" : "2x",
+      "subtype" : "44mm"
+    },
+    {
+      "filename" : "Designer-216.png",
+      "idiom" : "watch",
+      "role" : "quickLook",
+      "size" : "108x108",
+      "scale" : "2x",
+      "subtype" : "45mm"
     }
   ],
   "info" : {
