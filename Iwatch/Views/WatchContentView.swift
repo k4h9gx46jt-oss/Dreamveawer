@@ -3,149 +3,180 @@ import SwiftUI
 struct WatchContentView: View {
     @EnvironmentObject private var workoutManager: WorkoutManager
     @EnvironmentObject private var connectivity: WatchSideConnectivityManager
-    @State private var showLiveMonitor = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 12) {
-                    header
-                    HeartRateSparkline(samples: workoutManager.samples)
-                        .frame(height: 60)
-                        .overlay(alignment: .topLeading) {
-                            Text("Heart rate")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .padding(4)
-                        }
-                    metricOverview
-                    Text(formattedElapsed(workoutManager.elapsed))
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    Button(action: handlePrimaryAction) {
-                        Text(workoutManager.isTracking ? "Stop Sleep" : "Start Dream Mode")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .tint(workoutManager.isTracking ? .red : .purple)
-                    if workoutManager.isTracking {
-                        Button {
-                            showLiveMonitor = true
-                        } label: {
-                            Text("Live HR Monitor")
-                                .font(.callout)
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                    }
+        ZStack {
+            AngularGradient(colors: [.black, .indigo.opacity(0.7), .black], center: .center)
+                .ignoresSafeArea()
+            Group {
+                if workoutManager.isTracking {
+                    trackingPager
+                } else {
+                    idleScreen
                 }
-                .padding()
-            }
-            .navigationDestination(isPresented: $showLiveMonitor) {
-                LiveSleepSessionView(isPresented: $showLiveMonitor)
-                    .environmentObject(workoutManager)
-                    .environmentObject(connectivity)
-            }
-        }
-        .onAppear {
-            connectivity.sendConnectionState(workoutManager.isTracking ? .tracking : .ready)
-            if workoutManager.isTracking {
-                showLiveMonitor = true
-            }
-        }
-        .onChange(of: workoutManager.isTracking) { _, isTracking in
-            showLiveMonitor = isTracking
-        }
-    }
-
-    private var header: some View {
-        VStack(spacing: 4) {
-            Text("DreamWeaver")
-                .font(.headline)
-            Text(workoutManager.isTracking ? "Session running" : "Ready")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var metricOverview: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Label("\(Int(workoutManager.currentHeartRate)) bpm", systemImage: "heart.fill")
-                Label("\(Int(workoutManager.currentHRV)) ms", systemImage: "waveform.path")
-            }
-            Spacer()
-        }
-        .font(.caption)
-    }
-
-    private func handlePrimaryAction() {
-        if workoutManager.isTracking {
-            workoutManager.stop()
-        } else {
-            workoutManager.start()
-            showLiveMonitor = true
-        }
-    }
-}
-
-struct LiveSleepSessionView: View {
-    @EnvironmentObject private var workoutManager: WorkoutManager
-    @EnvironmentObject private var connectivity: WatchSideConnectivityManager
-    @Binding var isPresented: Bool
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                Text("Live Sleep Monitor")
-                    .font(.headline)
-                Text("Session has started. Keep your Apple Watch snug for accurate readings.")
-                    .font(.caption2)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                HeartRateSparkline(samples: workoutManager.samples)
-                    .frame(height: 70)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                VStack(alignment: .leading, spacing: 6) {
-                    metricRow(title: "Heart Rate", value: "\(Int(workoutManager.currentHeartRate)) bpm", icon: "heart.fill")
-                    metricRow(title: "HRV", value: "\(Int(workoutManager.currentHRV)) ms", icon: "waveform.path")
-                    metricRow(title: "Elapsed", value: formattedElapsed(workoutManager.elapsed), icon: "timer")
-                    phaseRow
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(.thinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                Button(action: stopSession) {
-                    Text("Stop Sleep Session")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                }
-                .tint(.red)
-                Button("Done") {
-                    dismissView()
-                }
-                .buttonStyle(.bordered)
             }
             .padding()
         }
-        .navigationTitle("Live Session")
         .onAppear {
-            if workoutManager.isTracking {
-                connectivity.sendConnectionState(.tracking)
+            workoutManager.refreshElapsed()
+            broadcastCurrentState()
+            connectivity.requestStatusSnapshot { snapshot in
+                if snapshot.isTracking,
+                   let sessionId = snapshot.sessionId,
+                   let startDate = snapshot.startDate {
+                    workoutManager.resumeIfNeeded(sessionId: sessionId, startDate: startDate)
+                } else if workoutManager.isTracking {
+                    workoutManager.handleRemoteStopSync()
+                }
             }
         }
-        .onChange(of: workoutManager.isTracking) { _, active in
-            if !active {
-                dismissView()
-            }
+        .onChange(of: workoutManager.isTracking) { _, tracking in
+            broadcastCurrentState()
+            if tracking { workoutManager.refreshElapsed() }
+        }
+        .onChange(of: workoutManager.sessionStartDate) { _, _ in
+            workoutManager.refreshElapsed()
         }
     }
 
-    private var phaseRow: some View {
+    private var idleScreen: some View {
+        ScrollView {
+            overviewStack
+        }
+    }
+
+    private var trackingPager: some View {
+        TabView {
+            ScrollView {
+                overviewStack
+            }
+            .tag(0)
+
+            ScrollView {
+                dreamDetailStack
+            }
+            .tag(1)
+        }
+        .tabViewStyle(.page(indexDisplayMode: .automatic))
+    }
+
+    private var overviewStack: some View {
+        VStack(spacing: 12) {
+            Text("DreamWeaver")
+                .font(.headline)
+                .foregroundStyle(.white)
+
+            connectionBadge
+
+            elapsedLabel
+
+            Text(workoutManager.isTracking ? "Live connection ready" : "Tap start to launch Dream Mode")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.8))
+                .multilineTextAlignment(.center)
+
+            metricsRow
+
+            MetricSparkline(
+                title: "HRV trend",
+                caption: "@sleepingchart",
+                samples: workoutManager.samples,
+                keyPath: \.hrv
+            )
+
+            if workoutManager.isTracking {
+                remPhaseRow
+            }
+
+            actionButton
+        }
+    }
+
+    private var dreamDetailStack: some View {
+        VStack(spacing: 16) {
+            dreamMirrorCard
+
+            MetricSparkline(
+                title: "HRV timeline",
+                caption: "Streaming to iPhone",
+                samples: workoutManager.samples,
+                keyPath: \.hrv,
+                chartHeight: 110
+            )
+
+            if workoutManager.isTracking {
+                remPhaseRow
+            }
+
+            metricsRow
+
+            actionButton
+        }
+    }
+
+    private var dreamMirrorCard: some View {
+        VStack(spacing: 8) {
+            Label("Dream Session", systemImage: "wave.3.right")
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+
+            elapsedLabel
+
+            Text("Live HR • HRV • REM")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.8))
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+    }
+
+    private var elapsedLabel: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Text(formattedElapsed(currentElapsed(reference: context.date)))
+                .font(.system(size: 34, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var connectionBadge: some View {
+        Label(workoutManager.isTracking ? "Dream Mode On" : "Ready to Start",
+              systemImage: workoutManager.isTracking ? "checkmark.circle.fill" : "dot.radiowaves.left.and.right")
+            .font(.caption.bold())
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background(workoutManager.isTracking ? Color.green.opacity(0.25) : Color.orange.opacity(0.25))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .foregroundStyle(.white)
+    }
+
+    private var metricsRow: some View {
+        HStack(spacing: 10) {
+            metricCard(title: "Heart", value: "\(Int(workoutManager.currentHeartRate)) bpm", icon: "heart.fill", tint: .pink)
+            metricCard(title: "HRV", value: "\(Int(workoutManager.currentHRV)) ms", icon: "waveform.path.ecg", tint: .cyan)
+        }
+    }
+
+    private func metricCard(title: String, value: String, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(value, systemImage: icon)
+                .font(.headline)
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var remPhaseRow: some View {
         HStack {
             Label(workoutManager.currentREMState.label, systemImage: "moon.zzz")
                 .foregroundStyle(workoutManager.currentREMState.tint)
@@ -154,64 +185,106 @@ struct LiveSleepSessionView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+        .padding(10)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    private func metricRow(title: String, value: String, icon: String) -> some View {
-        HStack {
-            Label(value, systemImage: icon)
-            Spacer()
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+    private var actionButton: some View {
+        Button(role: workoutManager.isTracking ? .destructive : nil, action: workoutManager.isTracking ? stopSession : startSession) {
+            Text(workoutManager.isTracking ? "Stop Sleep" : "Start Dream Mode")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
         }
+        .tint(workoutManager.isTracking ? .red : .purple)
+    }
+
+    private func startSession() {
+        workoutManager.start()
+        connectivity.sendConnectionState(.tracking)
     }
 
     private func stopSession() {
-        guard workoutManager.isTracking else {
-            dismissView()
-            return
-        }
         workoutManager.stop()
         connectivity.sendConnectionState(.ready)
-        dismissView()
     }
 
-    private func dismissView() {
-        isPresented = false
-        dismiss()
+    private func broadcastCurrentState() {
+        connectivity.sendConnectionState(workoutManager.isTracking ? .tracking : .ready)
+    }
+
+    private func currentElapsed(reference date: Date = Date()) -> TimeInterval {
+        if workoutManager.isTracking, let start = workoutManager.sessionStartDate {
+            return max(0, date.timeIntervalSince(start))
+        }
+        return workoutManager.elapsed
     }
 }
 
-private struct HeartRateSparkline: View {
+private struct MetricSparkline: View {
+    let title: String
+    let caption: String
     let samples: [WatchSleepSample]
+    let keyPath: KeyPath<WatchSleepSample, Double>
+    let chartHeight: CGFloat
+
+    init(title: String,
+         caption: String,
+         samples: [WatchSleepSample],
+         keyPath: KeyPath<WatchSleepSample, Double>,
+         chartHeight: CGFloat = 70) {
+        self.title = title
+        self.caption = caption
+        self.samples = samples
+        self.keyPath = keyPath
+        self.chartHeight = chartHeight
+    }
 
     var body: some View {
-        GeometryReader { proxy in
-            let points = normalizedPoints(width: proxy.size.width, height: proxy.size.height)
-            ZStack {
-                Capsule()
-                    .fill(Color.white.opacity(0.08))
-                if points.count > 1 {
-                    Path { path in
-                        path.move(to: points.first ?? .zero)
-                        for point in points.dropFirst() {
-                            path.addLine(to: point)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            GeometryReader { proxy in
+                let points = normalizedPoints(width: proxy.size.width, height: proxy.size.height)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                    if points.count > 1 {
+                        Path { path in
+                            path.move(to: points.first ?? .zero)
+                            for point in points.dropFirst() {
+                                path.addLine(to: point)
+                            }
                         }
+                        .stroke(LinearGradient(colors: [.cyan, .purple], startPoint: .leading, endPoint: .trailing), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    } else {
+                        Text("Waiting for samples")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
-                    .stroke(LinearGradient(colors: [.pink, .purple], startPoint: .leading, endPoint: .trailing), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                 }
             }
+            .frame(height: chartHeight)
+            Text(caption)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
+        .padding()
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
     private func normalizedPoints(width: CGFloat, height: CGFloat) -> [CGPoint] {
-        guard let minHR = samples.map({ $0.heartRate }).min(),
-              let maxHR = samples.map({ $0.heartRate }).max(),
-              maxHR != minHR else { return [] }
         let slice = samples.suffix(60)
+        let values = slice.map { $0[keyPath: keyPath] }
+        guard let minValue = values.min(), let maxValue = values.max(), slice.count > 1 else {
+            return []
+        }
+        let range = max(maxValue - minValue, 1)
         return slice.enumerated().map { index, sample in
             let x = CGFloat(index) / CGFloat(max(slice.count - 1, 1)) * width
-            let normalized = (sample.heartRate - minHR) / (maxHR - minHR)
+            let normalized = (sample[keyPath: keyPath] - minValue) / range
             let y = height - (CGFloat(normalized) * height)
             return CGPoint(x: x, y: y)
         }

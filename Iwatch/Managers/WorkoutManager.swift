@@ -8,6 +8,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published var currentHeartRate: Double = 0
     @Published var currentHRV: Double = 0
     @Published var elapsed: TimeInterval = 0
+    @Published private(set) var sessionStartDate: Date?
     @Published private(set) var samples: [WatchSleepSample] = []
     @Published private(set) var remWindows: [REMWindow] = []
     @Published private(set) var currentREMState: REMState = .light
@@ -19,32 +20,32 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var pushTimer: Timer?
     private let pushInterval: TimeInterval = 5
     private var sessionId = UUID()
-    private var sessionStartDate: Date?
+    private let persistence = UserDefaults.standard
+
+    private enum PersistenceKeys {
+        static let tracking = "dw.watch.tracking"
+        static let start = "dw.watch.sessionStart"
+        static let sessionId = "dw.watch.sessionId"
+    }
 
     override init() {
         super.init()
         NotificationCenter.default.addObserver(self, selector: #selector(handleCommand(_:)), name: .watchCommand, object: nil)
+        restorePersistedSessionIfNeeded()
     }
 
     func start() {
         guard !isTracking else { return }
         Task { try? await requestAuthorization() }
         configureWorkout()
-        isTracking = true
         elapsed = 0
-        sessionId = UUID()
-        sessionStartDate = Date()
         samples.removeAll()
         remWindows.removeAll()
         currentREMState = .light
-        WatchSideConnectivityManager.shared.sendSessionEvent(.started(id: sessionId, start: sessionStartDate ?? Date()))
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { [weak self] in
-                await MainActor.run {
-                    self?.elapsed += 1
-                }
-            }
-        }
+        sessionId = UUID()
+        sessionStartDate = Date()
+        isTracking = true
+        startElapsedTimer()
         Task { @MainActor in
             WatchSideConnectivityManager.shared.sendConnectionState(.tracking)
             WatchSideConnectivityManager.shared.sendSnapshot(
@@ -52,39 +53,55 @@ final class WorkoutManager: NSObject, ObservableObject {
                 hrv: self.currentHRV
             )
         }
-        pushTimer = Timer.scheduledTimer(withTimeInterval: pushInterval, repeats: true) { [weak self] _ in
-            Task { [weak self] in
-                guard let self else { return }
-                await MainActor.run {
-                    WatchSideConnectivityManager.shared.sendSnapshot(
-                        heartRate: self.currentHeartRate,
-                        hrv: self.currentHRV
-                    )
-                }
-            }
-        }
+        startPushTimer()
+        WatchSideConnectivityManager.shared.sendSessionEvent(.started(id: sessionId, start: sessionStartDate ?? Date()))
+        persistSessionState()
     }
 
     func stop() {
         guard isTracking else { return }
-        workoutSession?.end()
-        builder?.endCollection(withEnd: Date(), completion: { _, _ in })
-        workoutSession = nil
-        builder = nil
-        timer?.invalidate()
-        timer = nil
-        pushTimer?.invalidate()
-        pushTimer = nil
-        isTracking = false
         let endDate = Date()
-        WatchSideConnectivityManager.shared.sendSnapshot(
-            heartRate: currentHeartRate,
-            hrv: currentHRV
-        )
-        WatchSideConnectivityManager.shared.sendSessionEvent(.ended(id: sessionId, start: sessionStartDate ?? endDate, end: endDate, samples: samples))
-        Task { @MainActor in
-            WatchSideConnectivityManager.shared.sendConnectionState(.ready)
+        let startDate = sessionStartDate ?? endDate
+        completeStop(startDate: startDate, endDate: endDate, notifyPhone: true)
+    }
+
+    func refreshElapsed(reference date: Date = Date()) {
+        guard let start = sessionStartDate else {
+            elapsed = 0
+            return
         }
+        elapsed = max(0, date.timeIntervalSince(start))
+    }
+
+    func resumeIfNeeded(sessionId: UUID, startDate: Date) {
+        guard !isTracking else { return }
+        resumeExistingSession(sessionId: sessionId, startDate: startDate)
+    }
+
+    func handleRemoteStopSync() {
+        guard isTracking else {
+            clearPersistedSession()
+            return
+        }
+        let endDate = Date()
+        let startDate = sessionStartDate ?? endDate
+        completeStop(startDate: startDate, endDate: endDate, notifyPhone: false)
+    }
+
+    private func resumeExistingSession(sessionId: UUID, startDate: Date) {
+        Task { try? await requestAuthorization() }
+        configureWorkout()
+        self.sessionId = sessionId
+        sessionStartDate = startDate
+        elapsed = max(0, Date().timeIntervalSince(startDate))
+        samples.removeAll()
+        remWindows.removeAll()
+        currentREMState = .light
+        isTracking = true
+        startElapsedTimer()
+        startPushTimer()
+        persistSessionState()
+        WatchSideConnectivityManager.shared.sendConnectionState(.tracking)
     }
 
     private func configureWorkout() {
@@ -109,6 +126,85 @@ final class WorkoutManager: NSObject, ObservableObject {
         let typesToRead: Set = [HKObjectType.quantityType(forIdentifier: .heartRate)!,
                                 HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!]
         try await healthStore.requestAuthorization(toShare: [], read: typesToRead)
+    }
+
+    private func startElapsedTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { [weak self] in
+                await MainActor.run {
+                    self?.refreshElapsed()
+                }
+            }
+        }
+    }
+
+    private func startPushTimer() {
+        pushTimer?.invalidate()
+        pushTimer = Timer.scheduledTimer(withTimeInterval: pushInterval, repeats: true) { [weak self] _ in
+            Task { [weak self] in
+                guard let self else { return }
+                await MainActor.run {
+                    WatchSideConnectivityManager.shared.sendSnapshot(
+                        heartRate: self.currentHeartRate,
+                        hrv: self.currentHRV
+                    )
+                }
+            }
+        }
+    }
+
+    private func stopTimers() {
+        timer?.invalidate()
+        timer = nil
+        pushTimer?.invalidate()
+        pushTimer = nil
+    }
+
+    private func completeStop(startDate: Date, endDate: Date, notifyPhone: Bool) {
+        workoutSession?.end()
+        builder?.endCollection(withEnd: endDate, completion: { _, _ in })
+        workoutSession = nil
+        builder = nil
+        stopTimers()
+        isTracking = false
+        sessionStartDate = nil
+        WatchSideConnectivityManager.shared.sendSnapshot(
+            heartRate: currentHeartRate,
+            hrv: currentHRV
+        )
+        if notifyPhone {
+            WatchSideConnectivityManager.shared.sendSessionEvent(.ended(id: sessionId, start: startDate, end: endDate, samples: samples))
+        }
+        Task { @MainActor in
+            WatchSideConnectivityManager.shared.sendConnectionState(.ready)
+        }
+        clearPersistedSession()
+    }
+
+    private func persistSessionState() {
+        persistence.set(isTracking, forKey: PersistenceKeys.tracking)
+        persistence.set(sessionStartDate?.timeIntervalSince1970, forKey: PersistenceKeys.start)
+        persistence.set(sessionId.uuidString, forKey: PersistenceKeys.sessionId)
+    }
+
+    private func clearPersistedSession() {
+        persistence.removeObject(forKey: PersistenceKeys.tracking)
+        persistence.removeObject(forKey: PersistenceKeys.start)
+        persistence.removeObject(forKey: PersistenceKeys.sessionId)
+    }
+
+    private func restorePersistedSessionIfNeeded() {
+        guard persistence.bool(forKey: PersistenceKeys.tracking) else { return }
+        let startInterval = persistence.double(forKey: PersistenceKeys.start)
+        guard startInterval > 0,
+              let rawId = persistence.string(forKey: PersistenceKeys.sessionId),
+              let restoredId = UUID(uuidString: rawId) else {
+            clearPersistedSession()
+            return
+        }
+        let startDate = Date(timeIntervalSince1970: startInterval)
+        resumeExistingSession(sessionId: restoredId, startDate: startDate)
     }
 }
 

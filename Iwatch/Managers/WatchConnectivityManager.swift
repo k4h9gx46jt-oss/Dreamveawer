@@ -61,6 +61,24 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
         send(message: payload)
     }
 
+      func requestStatusSnapshot(completion: @escaping @MainActor (WatchStatusSnapshot) -> Void) {
+          guard WCSession.isSupported() else { return }
+          let session = WCSession.default
+          guard session.isReachable else { return }
+          session.sendMessage([
+              "command": "statusRequest"
+          ], replyHandler: { response in
+              Task { @MainActor in
+                  let tracking = (response["tracking"] as? Bool) ?? false
+                  let sessionIdString = response["sessionId"] as? String
+                  let sessionId = sessionIdString.flatMap { UUID(uuidString: $0) }
+                  let startInterval = response["start"] as? Double ?? 0
+                  let startDate = startInterval > 0 ? Date(timeIntervalSince1970: startInterval) : nil
+                  completion(WatchStatusSnapshot(isTracking: tracking, sessionId: sessionId, startDate: startDate))
+              }
+          }, errorHandler: { _ in })
+      }
+
     private func send(message: [String: Any]) {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
@@ -70,6 +88,12 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
             try? session.updateApplicationContext(message)
         }
     }
+}
+
+struct WatchStatusSnapshot {
+    let isTracking: Bool
+    let sessionId: UUID?
+    let startDate: Date?
 }
 
 extension WatchSideConnectivityManager: WCSessionDelegate {

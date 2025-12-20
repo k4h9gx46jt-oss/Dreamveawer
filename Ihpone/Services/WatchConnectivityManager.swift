@@ -93,6 +93,17 @@ extension PhoneWatchConnectivityManager: WCSessionDelegate {
         }
     }
 
+      nonisolated func session(_ session: WCSession, didReceiveMessage message: [String : Any], replyHandler: @escaping ([String : Any]) -> Void) {
+          Task { @MainActor in
+              if let command = message["command"] as? String, command == "statusRequest" {
+                  replyHandler(statusSnapshotPayload())
+                  return
+              }
+              process(message: message, from: session)
+              replyHandler([:])
+          }
+      }
+
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String : Any]) {
         Task { @MainActor in
             process(message: applicationContext, from: session)
@@ -150,6 +161,16 @@ private extension PhoneWatchConnectivityManager {
 
         refreshReachability(using: session)
     }
+
+      func statusSnapshotPayload() -> [String: Any] {
+          let tracking = remoteSessionStart != nil && remoteSessionEndedAt == nil
+          var payload: [String: Any] = ["tracking": tracking]
+          if tracking {
+              payload["sessionId"] = remoteSessionId?.uuidString ?? ""
+              payload["start"] = remoteSessionStart?.timeIntervalSince1970 ?? 0
+          }
+          return payload
+      }
 
     func handleEvent(_ event: String, payload: [String: Any]) {
         switch event {
