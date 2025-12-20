@@ -100,14 +100,21 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
 
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String : Any]) {
+        routeIncomingCommand(message)
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String : Any]) {
+        routeIncomingCommand(applicationContext)
+    }
+
+    private nonisolated func routeIncomingCommand(_ payload: [String: Any]) {
+        guard let command = payload["command"] as? String else { return }
         Task { @MainActor in
-            if let command = message["command"] as? String {
-                lastCommand = command
-                if command == "ping" {
-                    sendConnectionState(currentState == .inactive ? .ready : currentState)
-                } else {
-                    NotificationCenter.default.post(name: .watchCommand, object: nil, userInfo: ["command": command])
-                }
+            lastCommand = command
+            if command == "ping" {
+                sendConnectionState(currentState == .inactive ? .ready : currentState)
+            } else {
+                NotificationCenter.default.post(name: .watchCommand, object: nil, userInfo: ["command": command])
             }
         }
     }

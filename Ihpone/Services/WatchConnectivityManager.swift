@@ -43,13 +43,11 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     }
 
     func startSleepSession(id: UUID) {
-        guard WCSession.default.isReachable else { return }
-        WCSession.default.sendMessage(["command": "startSleep", "sessionId": id.uuidString], replyHandler: nil)
+        sendCommandToWatch("startSleep", extras: ["sessionId": id.uuidString])
     }
 
     func stopSleepSession(id: UUID) {
-        guard WCSession.default.isReachable else { return }
-        WCSession.default.sendMessage(["command": "stopSleep", "sessionId": id.uuidString], replyHandler: nil)
+        sendCommandToWatch("stopSleep", extras: ["sessionId": id.uuidString])
     }
 
     func attemptReconnect() {
@@ -122,6 +120,22 @@ private extension PhoneWatchConnectivityManager {
         let paired = session.isPaired && session.isWatchAppInstalled
         let reachable = session.isReachable || (session.activationState == .activated && paired)
         isWatchReachable = reachable || watchReportedConnected
+    }
+
+    func sendCommandToWatch(_ command: String, extras: [String: Any] = [:]) {
+        guard let session else { return }
+        var payload = extras
+        payload["command"] = command
+        payload["timestamp"] = Date().timeIntervalSince1970
+        if session.isReachable {
+            session.sendMessage(payload, replyHandler: nil, errorHandler: nil)
+        } else {
+            do {
+                try session.updateApplicationContext(payload)
+            } catch {
+                print("Failed to update application context: \(error.localizedDescription)")
+            }
+        }
     }
 
     func requestConnectionPing() {
