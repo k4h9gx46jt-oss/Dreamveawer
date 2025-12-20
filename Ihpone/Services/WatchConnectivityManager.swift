@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import WatchConnectivity
 
 @MainActor
@@ -24,8 +25,10 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             guard let self else { return }
-            self.liveHeartRate = Double.random(in: 55...75)
-            self.liveHRV = Double.random(in: 30...70)
+            Task { @MainActor in
+                self.liveHeartRate = Double.random(in: 55...75)
+                self.liveHRV = Double.random(in: 30...70)
+            }
         }
     }
 
@@ -56,5 +59,11 @@ extension PhoneWatchConnectivityManager: WCSessionDelegate {
         Task { @MainActor in
             isWatchReachable = session.isReachable
         }
+    }
+
+    nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
+
+    nonisolated func sessionDidDeactivate(_ session: WCSession) {
+        session.activate()
     }
 }

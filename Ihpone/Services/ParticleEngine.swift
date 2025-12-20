@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 struct DreamParticle: Identifiable {
     let id = UUID()
@@ -11,7 +12,10 @@ struct DreamParticle: Identifiable {
 
 @MainActor
 final class ParticleEngine: ObservableObject {
-    @Published var particles: [DreamParticle] = []
+    let objectWillChange = ObservableObjectPublisher()
+    var particles: [DreamParticle] = [] {
+        willSet { objectWillChange.send() }
+    }
     private var displayLink: CADisplayLink?
     private let bounds: CGRect
 

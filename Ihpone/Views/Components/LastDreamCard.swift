@@ -26,7 +26,7 @@ struct LastDreamCard: View {
                         Label("REM \(Int(dream.remPercentage))%", systemImage: "brain.head.profile")
                     }
                     .font(.caption)
-                    .labelStyle(.iconLeading)
+                    .labelStyle(.titleAndIcon)
                     .foregroundStyle(.white.opacity(0.9))
                 }
 

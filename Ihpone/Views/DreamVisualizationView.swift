@@ -7,11 +7,22 @@ struct DreamVisualizationView: View {
     var body: some View {
         ZStack {
             LinearGradient(colors: dream.mood.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-            Canvas { context, size in
+                .ignoresSafeArea()
+
+            Canvas { context, _ in
                 for particle in engine.particles {
-                    var resolved = context.resolve(Symbol(shape: Circle().path(in: CGRect(x: -particle.size/2, y: -particle.size/2, width: particle.size, height: particle.size)).path(in: .zero)))
-                    resolved.shading = .color(Color(hue: particle.hue, saturation: 0.8, brightness: 1.0, opacity: 0.6))
-                    context.draw(resolved, at: CGPoint(x: particle.position.x, y: particle.position.y))
+                    let rect = CGRect(
+                        x: particle.position.x - particle.size / 2,
+                        y: particle.position.y - particle.size / 2,
+                        width: particle.size,
+                        height: particle.size
+                    )
+                    var path = Path()
+                    path.addEllipse(in: rect)
+                    context.fill(
+                        path,
+                        with: .color(Color(hue: particle.hue, saturation: 0.75, brightness: 1.0, opacity: 0.55))
+                    )
                 }
             }
             .blendMode(.screen)
