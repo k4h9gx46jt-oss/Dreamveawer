@@ -1,6 +1,10 @@
 import Foundation
 import WatchConnectivity
 
+extension Notification.Name {
+    static let watchCommand = Notification.Name("WatchConnectivityCommand")
+}
+
 @MainActor
 final class WatchSideConnectivityManager: NSObject, ObservableObject {
     enum ConnectionState: String {
@@ -33,6 +37,21 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
         send(message: payload)
     }
 
+    func sendLiveSample(sample: WatchSleepSample, remState: REMState) {
+        let payload: [String: Any] = [
+            "event": "sample",
+            "timestamp": sample.timestamp.timeIntervalSince1970,
+            "heartRate": sample.heartRate,
+            "hrv": sample.hrv,
+            "remState": remState.rawValue
+        ]
+        send(message: payload)
+    }
+
+    func sendSessionEvent(_ event: SessionEvent) {
+        send(message: event.payload)
+    }
+
     func sendConnectionState(_ state: ConnectionState) {
         currentState = state
         let payload: [String: Any] = [
@@ -62,8 +81,41 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
                 lastCommand = command
                 if command == "ping" {
                     sendConnectionState(currentState == .inactive ? .ready : currentState)
+                } else {
+                    NotificationCenter.default.post(name: .watchCommand, object: nil, userInfo: ["command": command])
                 }
             }
+        }
+    }
+}
+
+enum SessionEvent {
+    case started(id: UUID, start: Date)
+    case ended(id: UUID, start: Date, end: Date, samples: [WatchSleepSample])
+
+    var payload: [String: Any] {
+        switch self {
+        case let .started(id, start):
+            return [
+                "event": "sleepStart",
+                "sessionId": id.uuidString,
+                "start": start.timeIntervalSince1970
+            ]
+        case let .ended(id, start, end, samples):
+            let encodedSamples = samples.prefix(1000).map { sample in
+                [
+                    "timestamp": sample.timestamp.timeIntervalSince1970,
+                    "heartRate": sample.heartRate,
+                    "hrv": sample.hrv
+                ]
+            }
+            return [
+                "event": "sleepEnd",
+                "sessionId": id.uuidString,
+                "start": start.timeIntervalSince1970,
+                "end": end.timeIntervalSince1970,
+                "samples": encodedSamples
+            ]
         }
     }
 }

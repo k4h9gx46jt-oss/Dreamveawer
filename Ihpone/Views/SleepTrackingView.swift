@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 struct SleepTrackingView: View {
     @EnvironmentObject private var dataStore: SleepDataStore
@@ -9,6 +10,7 @@ struct SleepTrackingView: View {
     @State private var isProcessingAI = false
     @State private var session = SleepSession()
     @State private var aiResult: SleepAIResult?
+    @State private var remoteControlled = false
 
     private let formatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
@@ -38,6 +40,8 @@ struct SleepTrackingView: View {
                 metricCard(title: "HRV", value: "\(Int(connectivity.liveHRV)) ms", icon: "waveform.path", color: .blue)
             }
 
+            sleepChart
+
             if isProcessingAI {
                 ProgressView("Interpreting your dream...")
                     .progressViewStyle(.circular)
@@ -56,6 +60,21 @@ struct SleepTrackingView: View {
         }
         .padding()
         .onDisappear { timer?.invalidate() }
+        .onReceive(connectivity.$sleepSamples) { samples in
+            guard isTracking else { return }
+            session.biosignals = samples
+            session.recalculateAverages()
+        }
+        .onReceive(connectivity.$remoteSessionStart) { start in
+            guard let start else { return }
+            if !isTracking {
+                startTracking(triggeredByRemote: true, startDate: start)
+            }
+        }
+        .onReceive(connectivity.$remoteSessionEndedAt) { end in
+            guard let end, isTracking, remoteControlled else { return }
+            stopTracking(triggeredByRemote: true, endDate: end)
+        }
     }
 
     private func metricCard(title: String, value: String, icon: String, color: Color) -> some View {
@@ -83,24 +102,36 @@ struct SleepTrackingView: View {
         }
     }
 
-    private func startTracking() {
+    private func startTracking(triggeredByRemote: Bool = false, startDate: Date = Date()) {
+        guard !isTracking else { return }
         isTracking = true
-        elapsed = 0
+        remoteControlled = triggeredByRemote
+        session = SleepSession(startedAt: startDate)
+        elapsed = Date().timeIntervalSince(startDate)
+        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            elapsed += 1
+            elapsed = Date().timeIntervalSince(session.startedAt)
         }
-        session = SleepSession()
         connectivity.startMirroringLiveData()
-        connectivity.startSleepSession(id: session.id)
+        if !triggeredByRemote {
+            connectivity.startSleepSession(id: session.id)
+        }
     }
 
-    private func stopTracking() {
+    private func stopTracking(triggeredByRemote: Bool = false, endDate: Date = Date()) {
+        guard isTracking else { return }
         isTracking = false
+        remoteControlled = false
         timer?.invalidate()
         timer = nil
-        connectivity.stopMirroringLiveData()
-        connectivity.stopSleepSession(id: session.id)
-        session.finish()
+        let samples = connectivity.sleepSamples
+        if !triggeredByRemote {
+            connectivity.stopMirroringLiveData()
+            connectivity.stopSleepSession(id: session.id)
+        }
+        session.biosignals = samples
+        session.recalculateAverages()
+        session.finish(on: endDate)
         Task {
             isProcessingAI = true
             let result = try? await AIDreamService.shared.interpret(session: session)
@@ -111,5 +142,28 @@ struct SleepTrackingView: View {
                 }
             }
         }
+    }
+}
+
+private extension SleepTrackingView {
+    var sleepChart: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("@sleepingchart")
+                .font(.headline)
+            Chart {
+                ForEach(connectivity.remWindows) { window in
+                    RectangleMark(xStart: .value("Start", window.start), xEnd: .value("End", window.end), yStart: .value("REM", 40), yEnd: .value("REM", 120))
+                        .foregroundStyle(.purple.opacity(0.2))
+                }
+                ForEach(connectivity.sleepSamples) { sample in
+                    LineMark(x: .value("Time", sample.timestamp), y: .value("Heart", sample.heartRate))
+                        .foregroundStyle(.pink)
+                }
+            }
+            .frame(height: 180)
+        }
+        .padding()
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 }

@@ -37,14 +37,22 @@ final class SleepDataStore: ObservableObject {
 
 struct SleepSession {
     let id = UUID()
-    let startedAt: Date = Date()
+    var startedAt: Date = Date()
     var endedAt: Date?
     var biosignals: [BiosignalDataPoint] = []
     var averageHeartRate: Double = 60
     var hrvAverage: Double = 52
     var ambientNoiseAvg: Double = 0.2
 
-    mutating func finish() {
-        endedAt = Date()
+    mutating func finish(on date: Date = Date()) {
+        endedAt = date
+    }
+
+    mutating func recalculateAverages() {
+        guard !biosignals.isEmpty else { return }
+        let hrSum = biosignals.reduce(0) { $0 + $1.heartRate }
+        let hrvSum = biosignals.reduce(0) { $0 + $1.hrv }
+        averageHeartRate = hrSum / Double(biosignals.count)
+        hrvAverage = hrvSum / Double(biosignals.count)
     }
 }

@@ -9,8 +9,14 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     @Published var isWatchReachable: Bool = false
     @Published var liveHeartRate: Double = 0
     @Published var liveHRV: Double = 0
+    @Published var sleepSamples: [BiosignalDataPoint] = []
+    @Published var remWindows: [SleepREMWindow] = []
+    @Published var remoteSessionStart: Date?
+    @Published var remoteSessionEndedAt: Date?
+    @Published var remoteSessionId: UUID?
 
     private var session: WCSession?
+    private var currentREMStart: Date?
 
     private override init() {
         super.init()
@@ -96,9 +102,17 @@ private extension PhoneWatchConnectivityManager {
     func resetLiveMetrics() {
         liveHeartRate = 0
         liveHRV = 0
+        sleepSamples = []
+        remWindows = []
+        currentREMStart = nil
     }
 
     func process(message: [String: Any], from session: WCSession) {
+        if let event = message["event"] as? String {
+            handleEvent(event, payload: message)
+            refreshReachability(using: session)
+            return
+        }
         if let connected = message["connected"] as? Bool {
             isWatchReachable = connected
         }
@@ -117,10 +131,81 @@ private extension PhoneWatchConnectivityManager {
 
         refreshReachability(using: session)
     }
+
+    func handleEvent(_ event: String, payload: [String: Any]) {
+        switch event {
+        case "sleepStart":
+            resetLiveMetrics()
+            if let idString = payload["sessionId"] as? String,
+               let startInterval = payload["start"] as? Double,
+               let uuid = UUID(uuidString: idString) {
+                remoteSessionId = uuid
+                remoteSessionStart = Date(timeIntervalSince1970: startInterval)
+                remoteSessionEndedAt = nil
+            }
+        case "sleepEnd":
+            if let endInterval = payload["end"] as? Double,
+               let startInterval = payload["start"] as? Double {
+                let endDate = Date(timeIntervalSince1970: endInterval)
+                finalizeREMWindow(until: endDate)
+                if let list = payload["samples"] as? [[String: Double]] {
+                    sleepSamples = list.compactMap { dict in
+                        guard let timestamp = dict["timestamp"],
+                              let heartRate = dict["heartRate"],
+                              let hrv = dict["hrv"] else { return nil }
+                        return BiosignalDataPoint(timestamp: Date(timeIntervalSince1970: timestamp), heartRate: heartRate, hrv: hrv, movement: 0)
+                    }
+                }
+                remoteSessionId = UUID(uuidString: payload["sessionId"] as? String ?? "")
+                remoteSessionStart = nil
+                remoteSessionEndedAt = endDate
+                currentREMStart = nil
+            }
+        case "sample":
+            guard let timestamp = payload["timestamp"] as? Double,
+                  let heartRate = payload["heartRate"] as? Double,
+                  let hrv = payload["hrv"] as? Double else { return }
+            let sample = BiosignalDataPoint(timestamp: Date(timeIntervalSince1970: timestamp), heartRate: heartRate, hrv: hrv, movement: 0)
+            sleepSamples.append(sample)
+            if sleepSamples.count > 720 { sleepSamples.removeFirst() }
+            liveHeartRate = heartRate
+            liveHRV = hrv
+            if let remState = payload["remState"] as? String {
+                updateREM(with: sample.timestamp, state: remState)
+            }
+        default:
+            break
+        }
+    }
+
+    func updateREM(with timestamp: Date, state: String) {
+        if state == REMState.rem.rawValue {
+            if currentREMStart == nil {
+                currentREMStart = timestamp
+            }
+        } else if let start = currentREMStart {
+            let window = SleepREMWindow(start: start, end: timestamp)
+            remWindows.append(window)
+            currentREMStart = nil
+        }
+    }
+
+    func finalizeREMWindow(until end: Date) {
+        if let start = currentREMStart {
+            remWindows.append(SleepREMWindow(start: start, end: end))
+            currentREMStart = nil
+        }
+    }
 }
 
 private enum WatchSideStatus: String {
     case inactive
     case ready
     case tracking
+}
+
+private enum REMState: String {
+    case light
+    case deep
+    case rem
 }
