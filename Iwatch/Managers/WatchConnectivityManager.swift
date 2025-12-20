@@ -1,5 +1,6 @@
 import Foundation
 import WatchConnectivity
+import WatchKit
 
 @MainActor
 final class WatchSideConnectivityManager: NSObject, ObservableObject {
@@ -117,10 +118,17 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
             lastCommand = command
             if command == "ping" {
                 sendConnectionState(currentState == .inactive ? .ready : currentState)
-            } else if let delegate = ExtensionDelegate.shared {
+                return
+            }
+
+            if let delegate = ExtensionDelegate.shared {
                 delegate.handleRemoteCommandPayload(payload)
-            } else if let remoteCommand = RemoteCommand(payload: payload) {
+                return
+            }
+
+            if let remoteCommand = RemoteCommand(payload: payload) {
                 RemoteCommandStore.shared.enqueue(remoteCommand)
+                scheduleBackgroundWake()
             }
         }
     }
@@ -138,6 +146,16 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
             processedCommandTokenSet.remove(removed)
         }
         return true
+    }
+
+    @MainActor
+    private func scheduleBackgroundWake() {
+        let preferredDate = Date().addingTimeInterval(5)
+        WKExtension.shared().scheduleBackgroundRefresh(withPreferredDate: preferredDate, userInfo: nil) { error in
+            if let error {
+                print("Failed to schedule background wake: \(error.localizedDescription)")
+            }
+        }
     }
 }
 
