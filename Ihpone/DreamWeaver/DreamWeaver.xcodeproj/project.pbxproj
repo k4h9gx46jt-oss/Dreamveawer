@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		CB6DF12A2EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = CB6DF1232EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		CB6DF12B2EF6BC7F0019840D /* DreamWeaver WatchKit App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CB6DF1222EF6BC7F0019840D /* DreamWeaver WatchKit App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CB6FF0022F3A000000000001 /* IwatchAppAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CB6FF0012F3A000000000001 /* IwatchAppAssets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,6 +74,7 @@
 		CB6DEA752EF6AAAC0019840D /* DreamWeaverUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DreamWeaverUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CB6DF1222EF6BC7F0019840D /* DreamWeaver WatchKit App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "DreamWeaver WatchKit App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		CB6DF1232EF6BC7F0019840D /* DreamWeaver WatchKit Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "DreamWeaver WatchKit Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		CB6FF0012F3A000000000001 /* IwatchAppAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = IwatchAppAssets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -153,6 +155,7 @@
 				CB6DF1012EF6B1230019840D /* ../Services */,
 				CB6DF1022EF6B1230019840D /* ../Views */,
 				CB6DF1102EF6BC7F0019840D /* ../../Iwatch */,
+				CB6FF0012F3A000000000001 /* IwatchAppAssets.xcassets */,
 				CB6DEA6E2EF6AAAC0019840D /* DreamWeaverTests */,
 				CB6DEA782EF6AAAC0019840D /* DreamWeaverUITests */,
 				CB6DEA5D2EF6AAAA0019840D /* Products */,
@@ -364,6 +367,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CB6FF0022F3A000000000001 /* IwatchAppAssets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
