@@ -14,6 +14,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var builder: HKLiveWorkoutBuilder?
     private var timer: Timer?
     private var pushTimer: Timer?
+    private let pushInterval: TimeInterval = 5
 
     func start() {
         Task { try? await requestAuthorization() }
@@ -23,7 +24,14 @@ final class WorkoutManager: NSObject, ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.elapsed += 1 }
         }
-        pushTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+        Task { @MainActor in
+            WatchSideConnectivityManager.shared.sendConnectionState(.tracking)
+            WatchSideConnectivityManager.shared.sendSnapshot(
+                heartRate: self.currentHeartRate,
+                hrv: self.currentHRV
+            )
+        }
+        pushTimer = Timer.scheduledTimer(withTimeInterval: pushInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
                 WatchSideConnectivityManager.shared.sendSnapshot(
@@ -44,6 +52,9 @@ final class WorkoutManager: NSObject, ObservableObject {
         pushTimer?.invalidate()
         pushTimer = nil
         isTracking = false
+        Task { @MainActor in
+            WatchSideConnectivityManager.shared.sendConnectionState(.ready)
+        }
     }
 
     private func configureWorkout() {

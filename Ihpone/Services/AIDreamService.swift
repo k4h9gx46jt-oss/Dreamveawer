@@ -13,6 +13,24 @@ struct SleepAIResult {
     let deepSleepEstimate: Double
 }
 
+struct DreamVideoScene: Identifiable {
+    let id = UUID()
+    let title: String
+    let subtitle: String
+    let symbol: String
+    let accentColor: Color
+    let duration: TimeInterval
+}
+
+struct DreamVideoResult: Identifiable {
+    let id = UUID()
+    let headline: String
+    let soundtrackMood: String
+    let previewText: String
+    let runtime: TimeInterval
+    let scenes: [DreamVideoScene]
+}
+
 final class AIDreamService {
     static let shared = AIDreamService()
     private init() {}
@@ -55,6 +73,50 @@ final class AIDreamService {
             mood: mood,
             remEstimate: Double.random(in: 18...32),
             deepSleepEstimate: Double.random(in: 20...35)
+        )
+    }
+
+    func generateVideo(for dream: SleepData) async throws -> DreamVideoResult {
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+
+        let palette = dream.mood.colors
+        let dominant = palette.first ?? .purple
+        let secondary = palette.dropFirst().first ?? .pink
+
+        let opener = DreamVideoScene(
+            title: "Lucid Opening",
+            subtitle: "Camera glides over luminous clouds formed from \(dream.aiThemes.first ?? "memory")",
+            symbol: "sparkles",
+            accentColor: dominant,
+            duration: 14
+        )
+
+        let mid = DreamVideoScene(
+            title: "Pulse Bridge",
+            subtitle: "Heart-rate \(Int(dream.averageHeartRate)) bpm drives rippling light over an astral river",
+            symbol: "waveform.path",
+            accentColor: secondary,
+            duration: 18
+        )
+
+        let finale = DreamVideoScene(
+            title: "Reawakening",
+            subtitle: "Dream symbol \(dream.aiSymbolism.first ?? "🌙") bursts into particles that dissolve at sunrise",
+            symbol: "sunrise.fill",
+            accentColor: dominant.opacity(0.8),
+            duration: 12
+        )
+
+        let runtime = opener.duration + mid.duration + finale.duration
+        let soundtrack = dream.mood.displayName + " synth"
+        let preview = "AI renders a \(dream.mood.displayName.lowercased()) short film inspired by your \(dream.aiNarrative.prefix(32))..."
+
+        return DreamVideoResult(
+            headline: "Dream Film: \(dream.mood.displayName)",
+            soundtrackMood: soundtrack,
+            previewText: preview,
+            runtime: runtime,
+            scenes: [opener, mid, finale]
         )
     }
 }

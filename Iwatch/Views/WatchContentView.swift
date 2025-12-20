@@ -28,6 +28,9 @@ struct WatchContentView: View {
             .tint(workoutManager.isTracking ? .red : .purple)
         }
         .padding()
+        .onAppear {
+            connectivity.sendConnectionState(workoutManager.isTracking ? .tracking : .ready)
+        }
     }
 
     private func toggle() {

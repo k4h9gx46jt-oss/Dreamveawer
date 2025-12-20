@@ -3,6 +3,9 @@ import Charts
 
 struct DreamDetailView: View {
     let dream: SleepData
+    @State private var isGeneratingVideo = false
+    @State private var videoResult: DreamVideoResult?
+    @State private var videoError: String?
 
     var body: some View {
         ScrollView {
@@ -10,6 +13,8 @@ struct DreamDetailView: View {
                 DreamVisualizationView(dream: dream)
                     .frame(height: 260)
                     .clipShape(RoundedRectangle(cornerRadius: 30))
+
+                videoButton
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("AI Interpretation")
@@ -53,6 +58,14 @@ struct DreamDetailView: View {
                 }
             }
         }
+        .sheet(item: $videoResult) { result in
+            DreamVideoView(result: result)
+        }
+        .alert("Unable to create video", isPresented: .init(get: { videoError != nil }, set: { _ in videoError = nil })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(videoError ?? "")
+        }
     }
 }
 
@@ -67,6 +80,64 @@ private struct WrapTags: View {
                 .padding(.vertical, 6)
                 .background(Color.white.opacity(0.1))
                 .clipShape(Capsule())
+        }
+    }
+}
+
+private extension DreamDetailView {
+    var videoButton: some View {
+        Button(action: generateVideo) {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: dream.mood.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 56, height: 56)
+                    Image(systemName: isGeneratingVideo ? "hourglass" : "play.circle")
+                        .font(.title)
+                        .foregroundStyle(.white)
+                        .symbolEffect(.pulse, options: .repeating, value: isGeneratingVideo)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Create AI Dream Video")
+                        .font(.headline)
+                    Text(isGeneratingVideo ? "Rendering scenes..." : "Transform this dream into a short film")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if isGeneratingVideo {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                }
+            }
+            .padding()
+            .background(.thinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+        }
+        .disabled(isGeneratingVideo)
+    }
+
+    func generateVideo() {
+        guard !isGeneratingVideo else { return }
+        isGeneratingVideo = true
+        videoError = nil
+
+        Task {
+            do {
+                let result = try await AIDreamService.shared.generateVideo(for: dream)
+                await MainActor.run {
+                    videoResult = result
+                    isGeneratingVideo = false
+                }
+            } catch {
+                await MainActor.run {
+                    videoError = error.localizedDescription
+                    isGeneratingVideo = false
+                }
+            }
         }
     }
 }

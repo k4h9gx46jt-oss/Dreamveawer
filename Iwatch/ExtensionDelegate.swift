@@ -1,5 +1,11 @@
 import WatchKit
 
 final class ExtensionDelegate: NSObject, WKExtensionDelegate {
-    // Keep hook for future background task handling if needed.
+    func applicationDidBecomeActive() {
+        Task { await WatchSideConnectivityManager.shared.sendConnectionState(.ready) }
+    }
+
+    func applicationWillResignActive() {
+        Task { await WatchSideConnectivityManager.shared.sendConnectionState(.inactive) }
+    }
 }
