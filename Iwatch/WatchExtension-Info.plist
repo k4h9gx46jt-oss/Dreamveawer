@@ -42,9 +42,8 @@
 	</array>
 	<key>WKBackgroundModes</key>
 	<array>
-		<string>connectivity</string>
-		<string>fetch</string>
-		<string>processing</string>
+		<string>remote-notification</string>
+		<string>workout-processing</string>
 	</array>
 </dict>
 </plist>
