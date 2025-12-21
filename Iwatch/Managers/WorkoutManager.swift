@@ -28,7 +28,9 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var builder: HKLiveWorkoutBuilder?
     private var timer: Timer?
     private var pushTimer: Timer?
+    private var scheduledSampleTimer: Timer?
     private let pushInterval: TimeInterval = 5
+    private let scheduledSampleInterval: TimeInterval = 1
     private var sessionId = UUID()
     private let persistence = UserDefaults.standard
 
@@ -65,6 +67,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             WatchSideConnectivityManager.shared.sendSnapshot(sample: self.makeSnapshotSample())
         }
         startPushTimer()
+        startScheduledSampleTimer()
         WatchSideConnectivityManager.shared.sendSessionEvent(.started(id: sessionId, start: sessionStartDate ?? Date()))
         persistSessionState()
     }
@@ -112,6 +115,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         isTracking = true
         startElapsedTimer()
         startPushTimer()
+        startScheduledSampleTimer()
         persistSessionState()
         WatchSideConnectivityManager.shared.sendConnectionState(.tracking)
     }
@@ -170,11 +174,22 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
     }
 
+    private func startScheduledSampleTimer() {
+        scheduledSampleTimer?.invalidate()
+        scheduledSampleTimer = Timer.scheduledTimer(withTimeInterval: scheduledSampleInterval, repeats: true) { [weak self] _ in
+            Task { [weak self] in
+                await self?.emitScheduledSample()
+            }
+        }
+    }
+
     private func stopTimers() {
         timer?.invalidate()
         timer = nil
         pushTimer?.invalidate()
         pushTimer = nil
+        scheduledSampleTimer?.invalidate()
+        scheduledSampleTimer = nil
     }
 
     private func completeStop(startDate: Date, endDate: Date, notifyPhone: Bool) {
@@ -275,6 +290,13 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
 }
 
 private extension WorkoutManager {
+    @MainActor
+    func emitScheduledSample() {
+        guard isTracking else { return }
+        synthesizeAdvancedSignals()
+        recordSample()
+    }
+
     func recordSample() {
         guard isTracking else { return }
         let sample = makeSnapshotSample()
