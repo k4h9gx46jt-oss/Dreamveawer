@@ -16,6 +16,7 @@ struct SleepTrackingView: View {
     @State private var mediaProgress: Double = 0
     @State private var mediaError: String?
     @State private var dreamVideoResult: DreamVideoResult?
+    @State private var selectedChartPage = 0
 
     private let formatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
@@ -243,7 +244,7 @@ private extension SleepTrackingView {
         VStack(alignment: .leading, spacing: 12) {
             Text("@sleepingchart")
                 .font(.headline)
-            TabView {
+            TabView(selection: $selectedChartPage) {
                 LiveMetricChart(
                     title: "Circulatory",
                     subtitle: "Heart & HRV",
@@ -253,15 +254,32 @@ private extension SleepTrackingView {
                         .init(label: "HRV", keyPath: \.hrv, color: .blue)
                     ]
                 )
+                .tag(0)
+
                 LiveMetricChart(
                     title: "Respiratory",
-                    subtitle: "SpO2 & Rate",
+                    subtitle: "SpO₂ & Rate",
                     samples: connectivity.sleepSamples,
                     metrics: [
-                        .init(label: "SpO2", keyPath: \.spo2, color: .teal),
+                        .init(label: "SpO₂", keyPath: \.spo2, color: .teal),
                         .init(label: "Resp Rate", keyPath: \.respiratoryRate, color: .green)
                     ]
                 )
+                .tag(1)
+
+                LiveMetricChart(
+                    title: "Breath Harmony",
+                    subtitle: "Calm vs. Risk",
+                    samples: connectivity.sleepSamples,
+                    metrics: [
+                        .init(label: "Resp Rhythm", keyPath: \.respiratoryRate, color: .mint),
+                        .init(label: "Apnea Risk (×40)", color: .orange) { point in
+                            point.apneaRisk * 40
+                        }
+                    ]
+                )
+                .tag(2)
+
                 LiveMetricChart(
                     title: "Thermoreg & Noise",
                     subtitle: "Temp & Sound",
@@ -271,9 +289,20 @@ private extension SleepTrackingView {
                         .init(label: "Noise", keyPath: \.noiseExposure, color: .yellow)
                     ]
                 )
+                .tag(3)
             }
-            .frame(height: 220)
-            .tabViewStyle(.page(indexDisplayMode: .automatic))
+            .frame(height: 240)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            HStack(spacing: 8) {
+                ForEach(0..<4) { index in
+                    Circle()
+                        .fill(index == selectedChartPage ? Color.primary : Color.secondary.opacity(0.3))
+                        .frame(width: index == selectedChartPage ? 10 : 8, height: index == selectedChartPage ? 10 : 8)
+                        .animation(.easeInOut(duration: 0.2), value: selectedChartPage)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 4)
         }
         .padding()
         .background(.thinMaterial)
@@ -374,8 +403,25 @@ private extension SleepTrackingView {
 private struct LiveMetricChart: View {
     struct MetricCurve {
         let label: String
-        let keyPath: KeyPath<BiosignalDataPoint, Double>
         let color: Color
+
+        private let valueProvider: (BiosignalDataPoint) -> Double
+
+        init(label: String, keyPath: KeyPath<BiosignalDataPoint, Double>, color: Color) {
+            self.label = label
+            self.color = color
+            self.valueProvider = { $0[keyPath: keyPath] }
+        }
+
+        init(label: String, color: Color, valueProvider: @escaping (BiosignalDataPoint) -> Double) {
+            self.label = label
+            self.color = color
+            self.valueProvider = valueProvider
+        }
+
+        func value(for point: BiosignalDataPoint) -> Double {
+            valueProvider(point)
+        }
     }
 
     let title: String
@@ -394,26 +440,48 @@ private struct LiveMetricChart: View {
             Text(subtitle)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            if plotSamples.isEmpty {
-                Text("Waiting for live data")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 160)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            } else {
-                Chart {
-                    ForEach(metrics, id: \.label) { metric in
-                        ForEach(plotSamples) { sample in
-                            LineMark(
-                                x: .value("Time", sample.timestamp),
-                                y: .value(metric.label, sample[keyPath: metric.keyPath])
-                            )
-                            .foregroundStyle(metric.color)
-                            .interpolationMethod(.catmullRom)
+            ZStack {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(.ultraThinMaterial)
+                if plotSamples.isEmpty {
+                    Text("Waiting for live data")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Chart {
+                        ForEach(metrics, id: \.label) { metric in
+                            ForEach(plotSamples) { sample in
+                                LineMark(
+                                    x: .value("Time", sample.timestamp),
+                                    y: .value(metric.label, metric.value(for: sample))
+                                )
+                                .foregroundStyle(metric.color)
+                                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                                .interpolationMethod(.catmullRom)
+                            }
                         }
                     }
+                    .chartYAxis(.hidden)
+                    .chartXAxis(.hidden)
+                    .padding(12)
                 }
-                .frame(height: 180)
+            }
+            .frame(height: 200)
+            legend
+        }
+    }
+
+    private var legend: some View {
+        HStack(spacing: 12) {
+            ForEach(metrics, id: \.label) { metric in
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(metric.color)
+                        .frame(width: 10, height: 10)
+                    Text(metric.label)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }

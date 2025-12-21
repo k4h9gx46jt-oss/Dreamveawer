@@ -428,10 +428,14 @@ private struct MetricSparkline: View {
         guard let minValue = values.min(), let maxValue = values.max(), slice.count > 1 else {
             return []
         }
-        let range = max(maxValue - minValue, 1)
+        let spread = max(maxValue - minValue, 0.001)
+        let padding = max(spread * 0.3, 1)
+        let low = minValue - padding
+        let high = maxValue + padding
+        let range = max(high - low, 1)
         return slice.enumerated().map { index, sample in
             let x = CGFloat(index) / CGFloat(max(slice.count - 1, 1)) * width
-            let normalized = (sample[keyPath: keyPath] - minValue) / range
+            let normalized = (sample[keyPath: keyPath] - low) / range
             let y = height - (CGFloat(normalized) * height)
             return CGPoint(x: x, y: y)
         }
