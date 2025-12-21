@@ -20,6 +20,8 @@ struct DreamVideoScene: Identifiable {
     let symbol: String
     let accentColor: Color
     let duration: TimeInterval
+    let startOffset: TimeInterval
+    let remSegmentId: UUID?
 }
 
 struct DreamVideoResult: Identifiable {
@@ -29,6 +31,10 @@ struct DreamVideoResult: Identifiable {
     let previewText: String
     let runtime: TimeInterval
     let scenes: [DreamVideoScene]
+    let videoURL: URL?
+    let audioURL: URL?
+    let waveform: [Double]
+    let diagnostics: [String: String]
 }
 
 final class AIDreamService {
@@ -88,7 +94,9 @@ final class AIDreamService {
             subtitle: "Camera glides over luminous clouds formed from \(dream.aiThemes.first ?? "memory")",
             symbol: "sparkles",
             accentColor: dominant,
-            duration: 14
+            duration: 14,
+            startOffset: 0,
+            remSegmentId: nil
         )
 
         let mid = DreamVideoScene(
@@ -96,7 +104,9 @@ final class AIDreamService {
             subtitle: "Heart-rate \(Int(dream.averageHeartRate)) bpm drives rippling light over an astral river",
             symbol: "waveform.path",
             accentColor: secondary,
-            duration: 18
+            duration: 18,
+            startOffset: 14,
+            remSegmentId: nil
         )
 
         let finale = DreamVideoScene(
@@ -104,7 +114,9 @@ final class AIDreamService {
             subtitle: "Dream symbol \(dream.aiSymbolism.first ?? "🌙") bursts into particles that dissolve at sunrise",
             symbol: "sunrise.fill",
             accentColor: dominant.opacity(0.8),
-            duration: 12
+            duration: 12,
+            startOffset: 32,
+            remSegmentId: nil
         )
 
         let runtime = opener.duration + mid.duration + finale.duration
@@ -116,7 +128,11 @@ final class AIDreamService {
             soundtrackMood: soundtrack,
             previewText: preview,
             runtime: runtime,
-            scenes: [opener, mid, finale]
+            scenes: [opener, mid, finale],
+            videoURL: nil,
+            audioURL: nil,
+            waveform: [],
+            diagnostics: [:]
         )
     }
 }

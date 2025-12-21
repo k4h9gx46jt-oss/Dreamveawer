@@ -12,6 +12,10 @@ struct SleepTrackingView: View {
     @State private var aiResult: SleepAIResult?
     @State private var remoteControlled = false
     @State private var showingConnectionHelp = false
+    @State private var mediaStatus: DreamMediaComposer.Status = .idle
+    @State private var mediaProgress: Double = 0
+    @State private var mediaError: String?
+    @State private var dreamVideoResult: DreamVideoResult?
 
     private let formatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
@@ -31,8 +35,7 @@ struct SleepTrackingView: View {
                 sleepingCharts
 
                 if isProcessingAI {
-                    ProgressView("Interpreting your dream...")
-                        .progressViewStyle(.circular)
+                    renderStatusBanner
                 }
 
                 Button(action: toggleTracking) {
@@ -48,6 +51,14 @@ struct SleepTrackingView: View {
             }
             .padding(.vertical, 24)
             .padding(.horizontal)
+        }
+        .sheet(item: $dreamVideoResult) { result in
+            DreamVideoView(result: result)
+        }
+        .alert("Dream media unavailable", isPresented: .init(get: { mediaError != nil }, set: { _ in mediaError = nil })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(mediaError ?? "")
         }
         .onAppear {
             if !isTracking, let start = connectivity.remoteSessionStart {
@@ -146,10 +157,22 @@ struct SleepTrackingView: View {
         completedSession.biosignals = samples
         completedSession.recalculateAverages()
         completedSession.finish(on: endDate)
+        completedSession.analyzeREMProfile()
         Task {
-            await MainActor.run { isProcessingAI = true }
-            await dataStore.persistSession(completedSession)
-            await MainActor.run { isProcessingAI = false }
+            await MainActor.run {
+                isProcessingAI = true
+                mediaStatus = .preparing
+                mediaProgress = 0.05
+            }
+            if let dream = await dataStore.persistSession(completedSession) {
+                await produceDreamMedia(for: dream)
+            } else {
+                await MainActor.run {
+                    isProcessingAI = false
+                    mediaStatus = .failed
+                    mediaError = "AI analysis was not available."
+                }
+            }
         }
     }
 }
@@ -180,6 +203,24 @@ private extension SleepTrackingView {
                 connectivity.attemptReconnect()
                 showingConnectionHelp = true
             }
+    }
+
+    var renderStatusBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                ProgressView(value: mediaProgress)
+                    .tint(.white)
+                Text(mediaStatus.label)
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            Text(mediaStatus.description)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
     var biosignalMetricGrid: some View {
@@ -302,6 +343,31 @@ private extension SleepTrackingView {
     private var noiseStatusText: String {
         guard connectivity.liveNoiseExposure > 0 else { return "Measuring" }
         return connectivity.liveNoiseExposure < 40 ? "Calm" : "Noisy"
+    }
+}
+
+private extension SleepTrackingView {
+    func produceDreamMedia(for dream: SleepData) async {
+        do {
+            let result = try await DreamMediaComposer.shared.composeMedia(for: dream) { value in
+                Task { @MainActor in
+                    mediaStatus = .rendering
+                    mediaProgress = value
+                }
+            }
+            await MainActor.run {
+                dreamVideoResult = result
+                isProcessingAI = false
+                mediaStatus = .completed
+                mediaProgress = 1.0
+            }
+        } catch {
+            await MainActor.run {
+                mediaError = error.localizedDescription
+                isProcessingAI = false
+                mediaStatus = .failed
+            }
+        }
     }
 }
 

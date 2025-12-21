@@ -6,6 +6,8 @@ struct DreamDetailView: View {
     @State private var isGeneratingVideo = false
     @State private var videoResult: DreamVideoResult?
     @State private var videoError: String?
+    @State private var mediaStatus: DreamMediaComposer.Status = .idle
+    @State private var mediaProgress: Double = 0
 
     var body: some View {
         ScrollView {
@@ -101,17 +103,20 @@ private extension DreamDetailView {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Create AI Dream Video")
                         .font(.headline)
-                    Text(isGeneratingVideo ? "Rendering scenes..." : "Transform this dream into a short film")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    if isGeneratingVideo {
+                        Text(mediaStatus.label)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        ProgressView(value: mediaProgress)
+                            .tint(.white)
+                    } else {
+                        Text("Transform this dream into a short film")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer()
-
-                if isGeneratingVideo {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                }
             }
             .padding()
             .background(.thinMaterial)
@@ -123,19 +128,29 @@ private extension DreamDetailView {
     func generateVideo() {
         guard !isGeneratingVideo else { return }
         isGeneratingVideo = true
+        mediaStatus = .preparing
+        mediaProgress = 0.1
         videoError = nil
 
         Task {
             do {
-                let result = try await AIDreamService.shared.generateVideo(for: dream)
+                let result = try await DreamMediaComposer.shared.composeMedia(for: dream) { progress in
+                    Task { @MainActor in
+                        mediaStatus = .rendering
+                        mediaProgress = progress
+                    }
+                }
                 await MainActor.run {
                     videoResult = result
                     isGeneratingVideo = false
+                    mediaStatus = .completed
+                    mediaProgress = 1.0
                 }
             } catch {
                 await MainActor.run {
                     videoError = error.localizedDescription
                     isGeneratingVideo = false
+                    mediaStatus = .failed
                 }
             }
         }

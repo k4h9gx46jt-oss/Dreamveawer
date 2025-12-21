@@ -19,6 +19,7 @@ struct SleepData: Identifiable, Codable {
     var aiVisualPrompt: String
     var biosignals: [BiosignalDataPoint]
     var ambientNoiseLevel: Double
+    var remProfile: REMDreamProfile?
 
     init(
         id: UUID = UUID(),
@@ -36,7 +37,8 @@ struct SleepData: Identifiable, Codable {
         aiConsciousness: Double,
         aiVisualPrompt: String,
         biosignals: [BiosignalDataPoint],
-        ambientNoiseLevel: Double
+        ambientNoiseLevel: Double,
+        remProfile: REMDreamProfile? = nil
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -54,6 +56,7 @@ struct SleepData: Identifiable, Codable {
         self.aiVisualPrompt = aiVisualPrompt
         self.biosignals = biosignals
         self.ambientNoiseLevel = ambientNoiseLevel
+        self.remProfile = remProfile
     }
 }
 
@@ -96,7 +99,100 @@ extension SleepData {
             aiConsciousness: 0.18,
             aiVisualPrompt: "Ethereal nebula softly rippling over calm water, translucent particles orbiting a glowing orb",
             biosignals: biosignals,
-            ambientNoiseLevel: 0.12
+            ambientNoiseLevel: 0.12,
+            remProfile: REMDreamProfile(
+                totalDuration: 1800,
+                intensityScore: 0.4,
+                moodPolarity: 0.6,
+                heartRateTrend: .rising,
+                hrvTrend: .falling,
+                apneaSpikeCount: 1,
+                noiseSpikeCount: 0,
+                segments: [
+                    REMSegment(
+                        start: start.addingTimeInterval(600),
+                        end: start.addingTimeInterval(900),
+                        dominantDriver: .heartRate,
+                        heartRateAvg: 64,
+                        hrvAvg: 58,
+                        intensity: 0.45,
+                        moodPolarity: 0.7
+                    ),
+                    REMSegment(
+                        start: start.addingTimeInterval(1200),
+                        end: start.addingTimeInterval(1500),
+                        dominantDriver: .hrv,
+                        heartRateAvg: 60,
+                        hrvAvg: 62,
+                        intensity: 0.38,
+                        moodPolarity: 0.65
+                    )
+                ]
+            )
         )
+    }
+}
+
+struct REMDreamProfile: Codable {
+    let totalDuration: TimeInterval
+    let intensityScore: Double
+    let moodPolarity: Double
+    let heartRateTrend: REMTrend
+    let hrvTrend: REMTrend
+    let apneaSpikeCount: Int
+    let noiseSpikeCount: Int
+    let segments: [REMSegment]
+}
+
+struct REMSegment: Identifiable, Codable {
+    let id: UUID
+    let start: Date
+    let end: Date
+    let dominantDriver: REMDriver
+    let heartRateAvg: Double
+    let hrvAvg: Double
+    let intensity: Double
+    let moodPolarity: Double
+
+    init(id: UUID = UUID(),
+         start: Date,
+         end: Date,
+         dominantDriver: REMDriver,
+         heartRateAvg: Double,
+         hrvAvg: Double,
+         intensity: Double,
+         moodPolarity: Double) {
+        self.id = id
+        self.start = start
+        self.end = end
+        self.dominantDriver = dominantDriver
+        self.heartRateAvg = heartRateAvg
+        self.hrvAvg = hrvAvg
+        self.intensity = intensity
+        self.moodPolarity = moodPolarity
+    }
+}
+
+enum REMDriver: String, Codable {
+    case heartRate
+    case hrv
+    case apnea
+    case noise
+    case temperature
+    case unknown
+}
+
+enum REMTrend: String, Codable {
+    case rising
+    case falling
+    case stable
+}
+
+extension REMTrend {
+    static func from(first: Double, last: Double, threshold: Double = 1.5) -> REMTrend {
+        let delta = last - first
+        if delta > threshold { return .rising }
+        if delta < -threshold { return .falling }
+        return .stable
     }
 }
