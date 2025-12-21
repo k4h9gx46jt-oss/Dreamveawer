@@ -22,30 +22,33 @@ struct SleepTrackingView: View {
     }()
 
     var body: some View {
-        VStack(spacing: 24) {
-            connectionStatusCard
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 24) {
+                connectionStatusCard
 
-            biosignalMetricGrid
+                biosignalMetricGrid
 
-            sleepingCharts
+                sleepingCharts
 
-            if isProcessingAI {
-                ProgressView("Interpreting your dream...")
-                    .progressViewStyle(.circular)
+                if isProcessingAI {
+                    ProgressView("Interpreting your dream...")
+                        .progressViewStyle(.circular)
+                }
+
+                Button(action: toggleTracking) {
+                    Text(isTracking ? "Stop Tracking" : "Start Dream Mode")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(isTracking ? Color.red : Color.purple)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .padding(.horizontal)
+                }
             }
-
-            Button(action: toggleTracking) {
-                Text(isTracking ? "Stop Tracking" : "Start Dream Mode")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(isTracking ? Color.red : Color.purple)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .padding(.horizontal)
-            }
+            .padding(.vertical, 24)
+            .padding(.horizontal)
         }
-        .padding()
         .onAppear {
             if !isTracking, let start = connectivity.remoteSessionStart {
                 startTracking(triggeredByRemote: true, startDate: start)
@@ -193,7 +196,6 @@ private extension SleepTrackingView {
             metricCard(title: "Sleep Score", value: formattedMetric(connectivity.liveSleepScore, suffix: ""), detail: sleepScoreStatusText, icon: "sparkles", color: .mint)
             metricCard(title: "Noise", value: formattedMetric(connectivity.liveNoiseExposure, suffix: " dBA"), detail: noiseStatusText, icon: "ear", color: .yellow)
         }
-        .padding(.horizontal)
     }
 
     var sleepingCharts: some View {
