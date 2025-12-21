@@ -49,6 +49,12 @@ struct SleepTrackingView: View {
             }
         }
         .padding()
+        .onAppear {
+            if !isTracking, let start = connectivity.remoteSessionStart {
+                startTracking(triggeredByRemote: true, startDate: start)
+            }
+            connectivity.requestWatchStatusSnapshot(force: true)
+        }
         .onDisappear { timer?.invalidate() }
         .onReceive(connectivity.$sleepSamples) { samples in
             guard isTracking else { return }

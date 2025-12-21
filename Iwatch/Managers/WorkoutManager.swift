@@ -35,6 +35,10 @@ final class WorkoutManager: NSObject, ObservableObject {
         restorePersistedSessionIfNeeded()
     }
 
+    var activeSessionId: UUID? {
+        isTracking ? sessionId : nil
+    }
+
     func start(remoteSessionId: UUID? = nil) {
         guard !isTracking else { return }
         Task { try? await requestAuthorization() }

@@ -23,6 +23,7 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     private var watchReportedConnected = false
     private var dreamStore: SleepDataStore?
     private var pendingRemoteSessions: [RemoteSleepSessionResult] = []
+    private var lastStatusProbeDate: Date?
 
     private override init() {
         super.init()
@@ -57,6 +58,7 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
         session.activate()
         refreshReachability(using: session)
         requestConnectionPing()
+        requestWatchStatusSnapshot(force: true)
     }
 
     func openWatchAppSettings() {
@@ -76,6 +78,27 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
             for session in bufferedSessions {
                 await store.ingestRemoteSession(session)
             }
+        }
+    }
+
+    func requestWatchStatusSnapshot(force: Bool = false) {
+        guard let session else { return }
+        guard session.activationState == .activated else { return }
+        if !force, let last = lastStatusProbeDate, Date().timeIntervalSince(last) < 5 {
+            return
+        }
+        guard session.isReachable else { return }
+        lastStatusProbeDate = Date()
+        let payload: [String: Any] = [
+            "command": "watchStatusProbe",
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        session.sendMessage(payload) { [weak self] response in
+            Task { @MainActor in
+                self?.handleStatusSnapshot(response)
+            }
+        } errorHandler: { error in
+            print("Watch status probe failed: \(error.localizedDescription)")
         }
     }
 }
@@ -134,6 +157,9 @@ private extension PhoneWatchConnectivityManager {
         let paired = session.isPaired && session.isWatchAppInstalled
         let reachable = session.isReachable || (session.activationState == .activated && paired)
         isWatchReachable = reachable || watchReportedConnected
+        if isWatchReachable {
+            requestWatchStatusSnapshot()
+        }
     }
 
     func sendCommandToWatch(_ command: String, extras: [String: Any] = [:]) {
@@ -195,6 +221,10 @@ private extension PhoneWatchConnectivityManager {
 
         if let hrv = message["hrv"] as? Double {
             liveHRV = hrv
+        }
+
+        if message["event"] == nil, message["tracking"] != nil {
+            handleStatusSnapshot(message)
         }
 
         refreshReachability(using: session)
@@ -287,6 +317,30 @@ private extension PhoneWatchConnectivityManager {
             Task { await store.ingestRemoteSession(result) }
         } else {
             pendingRemoteSessions.append(result)
+        }
+    }
+
+    private func handleStatusSnapshot(_ payload: [String: Any]) {
+        if let connected = payload["connected"] as? Bool {
+            watchReportedConnected = connected
+        }
+        guard let tracking = payload["tracking"] as? Bool else { return }
+        if tracking {
+            if let idString = payload["sessionId"] as? String,
+               let uuid = UUID(uuidString: idString) {
+                remoteSessionId = uuid
+            }
+            if let startInterval = payload["start"] as? Double {
+                let startDate = Date(timeIntervalSince1970: startInterval)
+                remoteSessionStart = startDate
+                remoteSessionEndedAt = nil
+            }
+        } else if remoteSessionStart != nil && remoteSessionEndedAt == nil {
+            remoteSessionStart = nil
+            remoteSessionId = nil
+        }
+        if let session {
+            refreshReachability(using: session)
         }
     }
 }

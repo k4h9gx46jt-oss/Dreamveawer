@@ -103,6 +103,10 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
         routeIncomingCommand(message)
     }
 
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String : Any], replyHandler: @escaping ([String : Any]) -> Void) {
+        routeIncomingCommand(message, replyHandler: replyHandler)
+    }
+
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String : Any]) {
         routeIncomingCommand(applicationContext)
     }
@@ -111,13 +115,19 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
         routeIncomingCommand(userInfo)
     }
 
-    private nonisolated func routeIncomingCommand(_ payload: [String: Any]) {
+    private nonisolated func routeIncomingCommand(_ payload: [String: Any], replyHandler: (([String: Any]) -> Void)? = nil) {
         Task { @MainActor in
             guard let command = payload["command"] as? String else { return }
             guard shouldProcessCommand(payload) else { return }
             lastCommand = command
             if command == "ping" {
                 sendConnectionState(currentState == .inactive ? .ready : currentState)
+                replyHandler?(currentStatusSnapshot())
+                return
+            }
+
+            if command == "watchStatusProbe" {
+                replyHandler?(currentStatusSnapshot())
                 return
             }
 
@@ -156,6 +166,24 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
                 print("Failed to schedule background wake: \(error.localizedDescription)")
             }
         }
+    }
+
+    @MainActor
+    private func currentStatusSnapshot() -> [String: Any] {
+        let workout = WorkoutManager.shared
+        var payload: [String: Any] = [
+            "tracking": workout.isTracking,
+            "connected": currentState != .inactive
+        ]
+        if workout.isTracking {
+            if let sessionId = workout.activeSessionId {
+                payload["sessionId"] = sessionId.uuidString
+            }
+            if let start = workout.sessionStartDate?.timeIntervalSince1970 {
+                payload["start"] = start
+            }
+        }
+        return payload
     }
 }
 

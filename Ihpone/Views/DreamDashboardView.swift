@@ -5,6 +5,7 @@ struct DreamDashboardView: View {
     let history: [SleepData]
     let startTapped: () -> Void
     let dreamTapped: (SleepData) -> Void
+    let isRemoteSessionActive: Bool
 
     var body: some View {
         ZStack {
@@ -72,16 +73,18 @@ struct DreamDashboardView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
-                        Image(systemName: "bed.double.fill")
+                        Image(systemName: isRemoteSessionActive ? "waveform.path.ecg" : "bed.double.fill")
                             .font(.title2)
-                        Text("Start Dream Mode")
+                        Text(isRemoteSessionActive ? "Dreaming" : "Start Dream Mode")
                             .font(.title2.bold())
                     }
                     .foregroundStyle(.white)
 
-                    Text("Track your sleep and visualize\nyour dreams")
+                    Text(isRemoteSessionActive ? "Session running on your Apple Watch" : "Track your sleep and visualize\nyour dreams")
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.9))
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
                 }
 
                 Spacer()
@@ -100,8 +103,8 @@ struct DreamDashboardView: View {
             .background(
                 LinearGradient(
                     colors: [
-                        Color(red: 0.25, green: 0.53, blue: 1.0),
-                        Color(red: 0.63, green: 0.37, blue: 1.0)
+                        isRemoteSessionActive ? Color(red: 0.99, green: 0.58, blue: 0.43) : Color(red: 0.25, green: 0.53, blue: 1.0),
+                        isRemoteSessionActive ? Color(red: 0.88, green: 0.32, blue: 0.71) : Color(red: 0.63, green: 0.37, blue: 1.0)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
