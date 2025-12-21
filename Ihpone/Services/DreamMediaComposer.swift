@@ -216,11 +216,13 @@ private final class DreamMediaCache {
 
 private enum VideoPlaceholderWriter {
     static func write(to url: URL, duration: TimeInterval, palette: [UIColor]) async throws {
+        let width = 640
+        let height = 360
         let assetWriter = try AVAssetWriter(outputURL: url, fileType: .mp4)
         let settings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoWidthKey: 640,
-            AVVideoHeightKey: 360
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height
         ]
         let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
         writerInput.expectsMediaDataInRealTime = false
@@ -229,8 +231,8 @@ private enum VideoPlaceholderWriter {
 
         let attributes: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32ARGB),
-            kCVPixelBufferWidthKey as String: 640,
-            kCVPixelBufferHeightKey as String: 360
+            kCVPixelBufferWidthKey as String: width,
+            kCVPixelBufferHeightKey as String: height
         ]
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: writerInput,
                                                            sourcePixelBufferAttributes: attributes)
@@ -254,8 +256,10 @@ private enum VideoPlaceholderWriter {
     }
 
     static func makePixelBuffer(palette: [UIColor], phase: Double) -> CVPixelBuffer? {
+        let width = 640
+        let height = 360
         var pixelBuffer: CVPixelBuffer?
-        let status = CVPixelBufferCreate(kCFAllocatorDefault, 640, 360, kCVPixelFormatType_32ARGB, nil, &pixelBuffer)
+        let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32ARGB, nil, &pixelBuffer)
         guard status == kCVReturnSuccess, let buffer = pixelBuffer else { return nil }
         CVPixelBufferLockBaseAddress(buffer, [])
         defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
@@ -270,26 +274,82 @@ private enum VideoPlaceholderWriter {
             bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
         ) else { return nil }
 
-        let colors = palette.isEmpty ? [UIColor.systemPurple.cgColor, UIColor.systemPink.cgColor] : palette.map { $0.cgColor }
+        let uiColors = palette.isEmpty ? [UIColor.systemPurple, UIColor.systemPink, UIColor.systemIndigo] : palette
+        let colors = uiColors.map { $0.cgColor }
         guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: nil) else {
             return nil
         }
         context.drawLinearGradient(gradient,
                                    start: CGPoint(x: 0, y: 0),
-                                   end: CGPoint(x: 0, y: CGFloat(CVPixelBufferGetHeight(buffer))),
+                                   end: CGPoint(x: 0, y: CGFloat(height)),
                                    options: [])
 
-        context.setFillColor(UIColor.white.withAlphaComponent(0.5).cgColor)
-        let dots = 18
-        for index in 0..<dots {
-            let t = Double(index) / Double(dots)
-            let x = CGFloat(t * Double(CVPixelBufferGetWidth(buffer)))
-            let y = CGFloat(abs(sin(phase * .pi * 2 + t * .pi)))*120 + 120
-            let rect = CGRect(x: x, y: y, width: 6, height: 6)
-            context.fillEllipse(in: rect)
-        }
+        let size = CGSize(width: width, height: height)
+        drawLightHaze(context: context, size: size, phase: phase)
+        drawDreamRibbons(context: context, size: size, palette: uiColors, phase: phase)
+        drawSpecularHighlights(context: context, size: size, palette: uiColors, phase: phase)
 
         return buffer
+    }
+
+    static func drawLightHaze(context: CGContext, size: CGSize, phase: Double) {
+        context.saveGState()
+        let center = CGPoint(x: size.width * 0.5, y: size.height * (0.3 + CGFloat(sin(phase * 2 * .pi)) * 0.1))
+        let colors = [UIColor.white.withAlphaComponent(0.15).cgColor,
+                      UIColor.clear.cgColor]
+        if let haze = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0, 1]) {
+            context.drawRadialGradient(haze,
+                                       startCenter: center,
+                                       startRadius: 0,
+                                       endCenter: center,
+                                       endRadius: max(size.width, size.height) * 0.8,
+                                       options: .drawsAfterEndLocation)
+        }
+        context.restoreGState()
+    }
+
+    static func drawDreamRibbons(context: CGContext, size: CGSize, palette: [UIColor], phase: Double) {
+        let ribbonCount = 3
+        let steps = 80
+        for index in 0..<ribbonCount {
+            let color = palette[index % palette.count].withAlphaComponent(0.45).cgColor
+            let path = UIBezierPath()
+            for step in 0...steps {
+                let progress = Double(step) / Double(steps)
+                let x = CGFloat(progress) * size.width
+                let wave = sin(progress * .pi * Double(index + 2) + phase * 2 * .pi)
+                let arc = cos(phase * Double(index + 1) * 1.3) * 0.2
+                let y = size.height * (0.5 + CGFloat(wave) * 0.2 + CGFloat(arc) * 0.15)
+                if step == 0 {
+                    path.move(to: CGPoint(x: x, y: y))
+                } else {
+                    path.addLine(to: CGPoint(x: x, y: y))
+                }
+            }
+            context.addPath(path.cgPath)
+            context.setLineWidth(CGFloat(1.5 + Double(index)))
+            context.setStrokeColor(color)
+            context.strokePath()
+        }
+    }
+
+    static func drawSpecularHighlights(context: CGContext, size: CGSize, palette: [UIColor], phase: Double) {
+        context.saveGState()
+        let highlightCount = 24
+        for index in 0..<highlightCount {
+            let t = (Double(index) / Double(highlightCount)) + phase
+            let normalized = t - floor(t)
+            let x = CGFloat(normalized) * size.width
+            let y = size.height * (0.2 + CGFloat(abs(sin((phase + Double(index)) * 2 * .pi))) * 0.6)
+            let radius = CGFloat(2.0 + sin((phase * 3) + Double(index)) * 1.5)
+            let color = palette[index % palette.count].withAlphaComponent(0.35).cgColor
+            context.setFillColor(color)
+            context.fillEllipse(in: CGRect(x: x - radius,
+                                           y: y - radius,
+                                           width: radius * 2,
+                                           height: radius * 2))
+        }
+        context.restoreGState()
     }
 }
 
@@ -303,12 +363,34 @@ private enum AudioPlaceholderWriter {
         }
         buffer.frameLength = totalFrames
         let channelData = buffer.floatChannelData![0]
-        let modulation = Float.random(in: 0.4...0.9)
+        let sampleRate = Float(format.sampleRate)
+        let totalDuration = max(Float(duration), 0.1)
+        let padIntervals: [Float] = [1.0, 1.25, 1.5, 1.75]
+        let pulseIntervals: [Float] = [2.0, 1.5, 2.5]
+        let bassIntervals: [Float] = [0.5, 0.75, 1.0]
+        let sceneLength: Float = 4.5
+        let base = Float(baseFrequency)
+        let twoPi = Float.pi * 2
         for frame in 0..<Int(totalFrames) {
-            let progress = Float(frame) / Float(totalFrames)
-            let vibrato = sin(progress * Float.pi * 6) * 6
-            let freq = Float(baseFrequency) * (0.9 + modulation * sin(progress * Float.pi * 2)) + vibrato
-            channelData[frame] = sin(2 * .pi * freq * Float(frame) / Float(format.sampleRate)) * 0.16
+            let t = Float(frame) / sampleRate
+            let sceneIndex = Int(t / sceneLength)
+            let padFreq = base * padIntervals[sceneIndex % padIntervals.count]
+            let pulseFreq = base * pulseIntervals[sceneIndex % pulseIntervals.count]
+            let bassFreq = base * bassIntervals[sceneIndex % bassIntervals.count]
+
+            let pad = sin(twoPi * padFreq * t + sin(t * 0.35) * 0.6) * 0.45
+            let arp = sin(twoPi * pulseFreq * t * (0.7 + 0.3 * sin(t * 0.5))) * 0.25
+            let shimmer = sin(twoPi * (padFreq * 3) * t + sin(t * 1.5)) * 0.12
+            let bass = sin(twoPi * bassFreq * t) * 0.2
+            let texture = (sin(twoPi * t * 0.3) + sin(twoPi * t * 0.57)) * 0.03
+
+            let attack = min(1, t / 2)
+            let release = min(1, max(0, (totalDuration - t) / 2.5))
+            let sceneAccent = 0.85 + 0.15 * sin(Float(sceneIndex) + t * 0.4)
+            let envelope = attack * release * sceneAccent
+
+            let signal = (pad + arp + shimmer + bass) * envelope + texture
+            channelData[frame] = max(-0.95, min(0.95, signal * 0.7))
         }
         try file.write(from: buffer)
     }
