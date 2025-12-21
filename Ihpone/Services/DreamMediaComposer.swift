@@ -100,7 +100,8 @@ private extension DreamMediaComposer {
         try await VideoPlaceholderWriter.write(
             to: fileURL,
             duration: min(duration, 60),
-            palette: palette
+            palette: palette,
+            visualProfile: prompt.visualProfile
         )
 
         progressHandler?(0.55)
@@ -177,6 +178,7 @@ private struct DreamMediaPrompt {
     let soundtrackLabel: String
     let preview: String
     let baseFrequency: Double
+    let visualProfile: DreamVisualProfile
 
     var diagnostics: [String: String] {
         [
@@ -184,7 +186,10 @@ private struct DreamMediaPrompt {
             "moodPolarity": String(format: "%.2f", profile.moodPolarity),
             "motionEnergy": String(format: "%.2f", motionEnergy),
             "apneaSpikes": "\(profile.apneaSpikeCount)",
-            "noiseSpikes": "\(profile.noiseSpikeCount)"
+            "noiseSpikes": "\(profile.noiseSpikeCount)",
+            "visualStyle": visualProfile.style.rawValue,
+            "ribbons": "\(visualProfile.ribbonLayers)",
+            "glyphComplexity": "\(visualProfile.glyphComplexity)"
         ]
     }
 
@@ -197,6 +202,67 @@ private struct DreamMediaPrompt {
         self.soundtrackLabel = "REM \(dream.mood.displayName) score"
         self.preview = "REM energy \(Int(profile.intensityScore * 100))% • mood \(String(format: "%.1f", profile.moodPolarity))"
         self.baseFrequency = 220 + Double(profile.moodPolarity * 60)
+        self.visualProfile = DreamVisualProfile(dream: dream, profile: profile)
+    }
+}
+
+private struct DreamVisualProfile {
+    enum Style: String {
+        case aurora
+        case astral
+        case tempest
+        case lucid
+    }
+
+    let style: Style
+    let ribbonLayers: Int
+    let ribbonAmplitude: Double
+    let sparkDensity: Int
+    let glyphComplexity: Int
+    let spiralLayers: Int
+    let nebulaStrength: Double
+    let orbitalCount: Int
+    let highlightDensity: Int
+    let filmGrain: Double
+    let scanlineOpacity: Double
+    let chromaDrift: Double
+    let runeAlpha: Double
+    let runeDrift: Double
+    let parallaxTilt: Double
+    let causticStrength: Double
+    let seed: UInt64
+
+    init(dream: SleepData, profile: REMDreamProfile) {
+        let intensity = clamp(profile.intensityScore, low: 0, high: 1)
+        let polarity = Double(profile.moodPolarity)
+        let apnea = Double(profile.apneaSpikeCount)
+        let noise = Double(profile.noiseSpikeCount)
+        switch dream.mood {
+        case .peaceful, .calm:
+            style = .aurora
+        case .ethereal:
+            style = .astral
+        case .intense, .turbulent:
+            style = .tempest
+        case .chaotic:
+            style = .lucid
+        }
+        ribbonLayers = max(3, Int(3 + intensity * 3 + apnea * 0.4))
+        ribbonAmplitude = 0.16 + intensity * 0.22 + apnea * 0.03
+        sparkDensity = 60 + Int(intensity * 50) + Int(noise * 3)
+        glyphComplexity = min(16, 8 + Int(abs(polarity) * 12) + profile.segments.count)
+        spiralLayers = 2 + Int(apnea > 1 ? 1 : 0) + Int(intensity * 1.3)
+        nebulaStrength = 0.45 + intensity * 0.6
+        orbitalCount = max(4, 4 + Int(intensity * 3))
+        highlightDensity = 18 + Int(intensity * 14)
+        filmGrain = 0.015 + intensity * 0.015 + noise * 0.002
+        scanlineOpacity = (style == .tempest ? 0.08 : 0.05) + intensity * 0.04
+        chromaDrift = 0.005 + abs(polarity) * 0.015 + intensity * 0.01
+        runeAlpha = 0.08 + abs(polarity) * 0.12
+        runeDrift = 0.35 + intensity * 0.45
+        parallaxTilt = (style == .tempest ? 10 : 6) + intensity * 8
+        causticStrength = 0.04 + intensity * 0.08 + apnea * 0.015
+        seed = makeSeed(from: dream.id)
     }
 }
 
@@ -313,7 +379,10 @@ private final class DreamMediaCache {
 }
 
 private enum VideoPlaceholderWriter {
-    static func write(to url: URL, duration: TimeInterval, palette: [UIColor]) async throws {
+    static func write(to url: URL,
+                      duration: TimeInterval,
+                      palette: [UIColor],
+                      visualProfile: DreamVisualProfile) async throws {
         let width = 640
         let height = 360
         let assetWriter = try AVAssetWriter(outputURL: url, fileType: .mp4)
@@ -344,7 +413,12 @@ private enum VideoPlaceholderWriter {
             while !writerInput.isReadyForMoreMediaData {
                 try await Task.sleep(nanoseconds: 10_000_000)
             }
-            if let buffer = makePixelBuffer(palette: palette, phase: Double(frameIndex) / Double(totalFrames)) {
+            let phase = Double(frameIndex) / Double(totalFrames)
+            let seed = visualProfile.seed &+ UInt64(frameIndex &* 7919)
+            if let buffer = makePixelBuffer(palette: palette,
+                                            phase: phase,
+                                            visualProfile: visualProfile,
+                                            seed: seed) {
                 adaptor.append(buffer, withPresentationTime: presentationTime)
             }
         }
@@ -353,11 +427,19 @@ private enum VideoPlaceholderWriter {
         await assetWriter.finishWriting()
     }
 
-    static func makePixelBuffer(palette: [UIColor], phase: Double) -> CVPixelBuffer? {
+    static func makePixelBuffer(palette: [UIColor],
+                                phase: Double,
+                                visualProfile: DreamVisualProfile,
+                                seed: UInt64) -> CVPixelBuffer? {
         let width = 640
         let height = 360
         var pixelBuffer: CVPixelBuffer?
-        let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32ARGB, nil, &pixelBuffer)
+        let status = CVPixelBufferCreate(kCFAllocatorDefault,
+                                         width,
+                                         height,
+                                         kCVPixelFormatType_32ARGB,
+                                         nil,
+                                         &pixelBuffer)
         guard status == kCVReturnSuccess, let buffer = pixelBuffer else { return nil }
         CVPixelBufferLockBaseAddress(buffer, [])
         defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
@@ -374,25 +456,87 @@ private enum VideoPlaceholderWriter {
 
         let uiColors = palette.isEmpty ? [UIColor.systemPurple, UIColor.systemPink, UIColor.systemIndigo] : palette
         let colors = uiColors.map { $0.cgColor }
-        guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: nil) else {
+        guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                        colors: colors as CFArray,
+                                        locations: nil) else {
             return nil
         }
-        context.drawLinearGradient(gradient,
-                                   start: CGPoint(x: 0, y: 0),
-                                   end: CGPoint(x: 0, y: CGFloat(height)),
-                                   options: [])
 
         let size = CGSize(width: width, height: height)
+        let tilt = CGFloat(visualProfile.parallaxTilt)
+        let startPoint = CGPoint(x: size.width * 0.5 - tilt * 2, y: 0)
+        let endPoint = CGPoint(x: size.width * 0.5 + tilt * 0.8, y: size.height)
+        context.drawLinearGradient(gradient,
+                                   start: startPoint,
+                                   end: endPoint,
+                                   options: [])
+
         drawLightHaze(context: context, size: size, phase: phase)
-        drawAuroraBands(context: context, size: size, palette: uiColors, phase: phase)
-        drawOrbitalTrails(context: context, size: size, palette: uiColors, phase: phase)
-        drawDreamRibbons(context: context, size: size, palette: uiColors, phase: phase)
-        drawPulseNebula(context: context, size: size, palette: uiColors, phase: phase)
-        drawStarlightField(context: context, size: size, palette: uiColors, phase: phase)
-        drawSpecularHighlights(context: context, size: size, palette: uiColors, phase: phase)
-        overlayGlyphGrid(context: context, size: size, phase: phase)
+        drawAuroraBands(context: context,
+                        size: size,
+                        palette: uiColors,
+                        phase: phase,
+                        layers: visualProfile.ribbonLayers,
+                        amplitude: visualProfile.ribbonAmplitude)
+        drawDreamRibbons(context: context,
+                         size: size,
+                         palette: uiColors,
+                         phase: phase,
+                         layers: visualProfile.ribbonLayers,
+                         amplitude: visualProfile.ribbonAmplitude)
+        drawREMSpirals(context: context,
+                       size: size,
+                       palette: uiColors,
+                       profile: visualProfile,
+                       phase: phase)
+        drawPulseNebula(context: context,
+                        size: size,
+                        palette: uiColors,
+                        phase: phase,
+                        strength: visualProfile.nebulaStrength)
+        drawOrbitalTrails(context: context,
+                          size: size,
+                          palette: uiColors,
+                          phase: phase,
+                          trailCount: visualProfile.orbitalCount,
+                          tilt: visualProfile.parallaxTilt)
+        drawStarlightField(context: context,
+                           size: size,
+                           palette: uiColors,
+                           phase: phase,
+                           starCount: visualProfile.sparkDensity)
+        drawSpecularHighlights(context: context,
+                               size: size,
+                               palette: uiColors,
+                               phase: phase,
+                               highlightCount: visualProfile.highlightDensity)
+        overlaySignalCaustics(context: context,
+                              size: size,
+                              palette: uiColors,
+                              phase: phase,
+                              strength: visualProfile.causticStrength)
+        overlayGlyphGrid(context: context,
+                         size: size,
+                         phase: phase,
+                         complexity: visualProfile.glyphComplexity,
+                         alpha: visualProfile.runeAlpha,
+                         drift: visualProfile.runeDrift)
         overlayStaffLines(context: context, size: size, phase: phase)
-        applyLensBloom(context: context, size: size, phase: phase)
+        applyLensBloom(context: context,
+                       size: size,
+                       phase: phase,
+                       intensity: visualProfile.nebulaStrength)
+        applyScanlineVignette(context: context,
+                              size: size,
+                              opacity: visualProfile.scanlineOpacity)
+        overlayChromaticAberration(context: context,
+                                   size: size,
+                                   palette: uiColors,
+                                   shift: visualProfile.chromaDrift)
+        addFilmGrain(context: context,
+                     size: size,
+                     amount: visualProfile.filmGrain,
+                     seed: seed)
 
         return buffer
     }
@@ -413,18 +557,25 @@ private enum VideoPlaceholderWriter {
         context.restoreGState()
     }
 
-    static func drawDreamRibbons(context: CGContext, size: CGSize, palette: [UIColor], phase: Double) {
-        let ribbonCount = 3
-        let steps = 80
+    static func drawDreamRibbons(context: CGContext,
+                                 size: CGSize,
+                                 palette: [UIColor],
+                                 phase: Double,
+                                 layers: Int,
+                                 amplitude: Double) {
+        let ribbonCount = max(1, layers)
+        let steps = 100
         for index in 0..<ribbonCount {
-            let color = palette[index % palette.count].withAlphaComponent(0.45).cgColor
+            let alpha = 0.25 + CGFloat(index) * 0.03
+            let color = palette[index % palette.count].withAlphaComponent(alpha).cgColor
             let path = UIBezierPath()
             for step in 0...steps {
                 let progress = Double(step) / Double(steps)
                 let x = CGFloat(progress) * size.width
-                let wave = sin(progress * .pi * Double(index + 2) + phase * 2 * .pi)
-                let arc = cos(phase * Double(index + 1) * 1.3) * 0.2
-                let y = size.height * (0.5 + CGFloat(wave) * 0.2 + CGFloat(arc) * 0.15)
+                let wave = sin(progress * .pi * (Double(index) * 0.6 + 1.8) + phase * 2 * .pi)
+                let arc = cos(phase * Double(index + 1) * 1.1) * 0.12
+                let jitter = sin(progress * 12 + Double(index)) * 0.02
+                let y = size.height * (0.5 + CGFloat(wave) * CGFloat(amplitude) + CGFloat(arc + jitter))
                 if step == 0 {
                     path.move(to: CGPoint(x: x, y: y))
                 } else {
@@ -432,22 +583,26 @@ private enum VideoPlaceholderWriter {
                 }
             }
             context.addPath(path.cgPath)
-            context.setLineWidth(CGFloat(1.5 + Double(index)))
+            context.setLineWidth(CGFloat(1.2 + Double(index) * 0.4))
             context.setStrokeColor(color)
             context.strokePath()
         }
     }
 
-    static func drawSpecularHighlights(context: CGContext, size: CGSize, palette: [UIColor], phase: Double) {
+    static func drawSpecularHighlights(context: CGContext,
+                                       size: CGSize,
+                                       palette: [UIColor],
+                                       phase: Double,
+                                       highlightCount: Int) {
         context.saveGState()
-        let highlightCount = 24
-        for index in 0..<highlightCount {
-            let t = (Double(index) / Double(highlightCount)) + phase
+        let count = max(10, highlightCount)
+        for index in 0..<count {
+            let t = (Double(index) / Double(count)) + phase
             let normalized = t - floor(t)
             let x = CGFloat(normalized) * size.width
             let y = size.height * (0.2 + CGFloat(abs(sin((phase + Double(index)) * 2 * .pi))) * 0.6)
-            let radius = CGFloat(2.0 + sin((phase * 3) + Double(index)) * 1.5)
-            let color = palette[index % palette.count].withAlphaComponent(0.35).cgColor
+            let radius = CGFloat(1.8 + sin((phase * 3) + Double(index)) * 1.2)
+            let color = palette[index % palette.count].withAlphaComponent(0.25 + CGFloat(index % 3) * 0.05).cgColor
             context.setFillColor(color)
             context.fillEllipse(in: CGRect(x: x - radius,
                                            y: y - radius,
@@ -457,20 +612,25 @@ private enum VideoPlaceholderWriter {
         context.restoreGState()
     }
 
-    static func drawOrbitalTrails(context: CGContext, size: CGSize, palette: [UIColor], phase: Double) {
+    static func drawOrbitalTrails(context: CGContext,
+                                  size: CGSize,
+                                  palette: [UIColor],
+                                  phase: Double,
+                                  trailCount: Int,
+                                  tilt: Double) {
         context.saveGState()
-        let trailCount = 5
-        for index in 0..<trailCount {
-            let normalized = Double(index) / Double(trailCount)
+        let count = max(3, trailCount)
+        for index in 0..<count {
+            let normalized = Double(index) / Double(count)
             let radius = size.width * 0.18 + CGFloat(normalized) * size.width * 0.12
-            let center = CGPoint(x: size.width * 0.5 + CGFloat(sin(phase * 1.3 + normalized * 2)) * 40,
-                                 y: size.height * 0.55 + CGFloat(cos(phase * 1.1 + normalized * 2)) * 20)
+            let center = CGPoint(x: size.width * 0.5 + CGFloat(sin(phase * 1.3 + normalized * 2)) * CGFloat(tilt),
+                                 y: size.height * 0.55 + CGFloat(cos(phase * 1.1 + normalized * 2)) * CGFloat(tilt * 0.2))
             let path = UIBezierPath(ovalIn: CGRect(x: center.x - radius,
                                                    y: center.y - radius * 0.4,
                                                    width: radius * 2,
                                                    height: radius * 0.8))
             context.setStrokeColor(palette[index % palette.count].withAlphaComponent(0.25).cgColor)
-            context.setLineWidth(CGFloat(0.8 + normalized))
+            context.setLineWidth(CGFloat(0.7 + normalized))
             context.addPath(path.cgPath)
             context.strokePath()
 
@@ -484,16 +644,20 @@ private enum VideoPlaceholderWriter {
         context.restoreGState()
     }
 
-    static func drawStarlightField(context: CGContext, size: CGSize, palette: [UIColor], phase: Double) {
+    static func drawStarlightField(context: CGContext,
+                                   size: CGSize,
+                                   palette: [UIColor],
+                                   phase: Double,
+                                   starCount: Int) {
         context.saveGState()
-        let starCount = 70
-        for index in 0..<starCount {
-            let t = Double(index) / Double(starCount)
-            let flicker = CGFloat(0.15 + 0.1 * sin(phase * 5 + t * 40))
+        let count = max(40, starCount)
+        for index in 0..<count {
+            let t = Double(index) / Double(count)
+            let flicker = CGFloat(0.15 + 0.1 * sin(phase * (4 + Double(index % 7)) + t * 30))
             let x = CGFloat((sin(t * 89 + phase * 1.3) + 1) * 0.5) * size.width
             let y = CGFloat((cos(t * 53 + phase * 0.9) + 1) * 0.5) * size.height
             let rect = CGRect(x: x, y: y, width: 1.5 + flicker, height: 1.5 + flicker)
-            let color = palette[index % palette.count].withAlphaComponent(0.25 + 0.2 * flicker).cgColor
+            let color = palette[index % palette.count].withAlphaComponent(0.2 + 0.15 * flicker).cgColor
             context.setFillColor(color)
             context.fillEllipse(in: rect)
         }
@@ -516,20 +680,25 @@ private enum VideoPlaceholderWriter {
         context.restoreGState()
     }
 
-    static func drawAuroraBands(context: CGContext, size: CGSize, palette: [UIColor], phase: Double) {
+    static func drawAuroraBands(context: CGContext,
+                                size: CGSize,
+                                palette: [UIColor],
+                                phase: Double,
+                                layers: Int,
+                                amplitude: Double) {
         context.saveGState()
-        let layers = 4
-        for index in 0..<layers {
-            let hueShift = Double(index) / Double(layers)
-            let color = palette[index % palette.count].withAlphaComponent(0.35).cgColor
+        let count = max(2, layers / 2)
+        for index in 0..<count {
+            let hueShift = Double(index) / Double(max(1, count))
+            let color = palette[index % palette.count].withAlphaComponent(0.3).cgColor
             let path = UIBezierPath()
             let steps = 120
             for step in 0...steps {
                 let progress = Double(step) / Double(steps)
                 let x = CGFloat(progress) * size.width
-                let wave = sin(progress * .pi * (1.6 + hueShift) + phase * 3)
-                let drift = cos((phase + hueShift) * 2 * .pi) * 0.15
-                let y = size.height * (0.2 + CGFloat(wave) * 0.12 + CGFloat(drift))
+                let wave = sin(progress * .pi * (1.2 + hueShift) + phase * 3)
+                let drift = cos((phase + hueShift) * 2 * .pi) * amplitude
+                let y = size.height * (0.2 + CGFloat(wave) * 0.12 + CGFloat(drift) * 0.2)
                 if step == 0 {
                     path.move(to: CGPoint(x: x, y: y))
                 } else {
@@ -537,7 +706,7 @@ private enum VideoPlaceholderWriter {
                 }
             }
             context.addPath(path.cgPath)
-            context.setLineWidth(CGFloat(4 - index))
+            context.setLineWidth(CGFloat(4 - min(index, 2)))
             context.setShadow(offset: .zero, blur: CGFloat(15 - index * 3), color: color)
             context.setStrokeColor(color)
             context.strokePath()
@@ -545,13 +714,17 @@ private enum VideoPlaceholderWriter {
         context.restoreGState()
     }
 
-    static func drawPulseNebula(context: CGContext, size: CGSize, palette: [UIColor], phase: Double) {
+    static func drawPulseNebula(context: CGContext,
+                                size: CGSize,
+                                palette: [UIColor],
+                                phase: Double,
+                                strength: Double) {
         context.saveGState()
         let center = CGPoint(x: size.width * 0.5, y: size.height * (0.55 + CGFloat(sin(phase * 1.7)) * 0.05))
         for index in 0..<3 {
-            let pulse = CGFloat(1 + sin(phase * Double(index + 2) * 2 * .pi) * 0.25)
-            let radius = max(size.width, size.height) * (0.25 + CGFloat(index) * 0.2) * pulse
-            let colors = [palette[(index + 1) % palette.count].withAlphaComponent(0.25).cgColor,
+            let modulation = 1 + sin(phase * Double(index + 2) * 2 * .pi) * 0.25 * strength
+            let radius = max(size.width, size.height) * (0.25 + CGFloat(index) * 0.2) * CGFloat(modulation)
+            let colors = [palette[(index + 1) % palette.count].withAlphaComponent(0.2 + CGFloat(strength) * 0.1).cgColor,
                           UIColor.clear.cgColor]
             if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0, 1]) {
                 context.drawRadialGradient(gradient,
@@ -565,38 +738,153 @@ private enum VideoPlaceholderWriter {
         context.restoreGState()
     }
 
-    static func overlayGlyphGrid(context: CGContext, size: CGSize, phase: Double) {
+    static func overlayGlyphGrid(context: CGContext,
+                                 size: CGSize,
+                                 phase: Double,
+                                 complexity: Int,
+                                 alpha: Double,
+                                 drift: Double) {
         context.saveGState()
-        context.setStrokeColor(UIColor.white.withAlphaComponent(0.08).cgColor)
         context.setLineWidth(0.5)
-        let columns = 5
-        let rows = 3
+        let columns = max(3, complexity)
+        let rows = max(2, (complexity + 1) / 2)
         for row in 0..<rows {
             for column in 0..<columns {
                 let cellWidth = size.width / CGFloat(columns)
                 let cellHeight = size.height / CGFloat(rows)
                 let origin = CGPoint(x: CGFloat(column) * cellWidth, y: CGFloat(row) * cellHeight)
-                let inset = CGFloat(8 + (sin(phase * 4 + Double(row + column)) + 1) * 4)
+                let wave = sin(phase * 6 + Double(row + column)) * drift
+                let inset = CGFloat(6 + wave * 8)
                 let rect = CGRect(x: origin.x + inset,
                                   y: origin.y + inset,
                                   width: cellWidth - inset * 2,
                                   height: cellHeight - inset * 2)
+                let tint = UIColor.white.withAlphaComponent(CGFloat(alpha) * 0.5)
+                context.setStrokeColor(tint.cgColor)
                 context.stroke(rect)
             }
         }
         context.restoreGState()
     }
 
-    static func applyLensBloom(context: CGContext, size: CGSize, phase: Double) {
+    static func overlaySignalCaustics(context: CGContext,
+                                      size: CGSize,
+                                      palette: [UIColor],
+                                      phase: Double,
+                                      strength: Double) {
+        context.saveGState()
+        let bands = max(6, Int(10 + strength * 40))
+        for index in 0..<bands {
+            let normalized = Double(index) / Double(bands)
+            let width = size.width / CGFloat(bands) * CGFloat(0.3 + sin(normalized * 8 + phase * 3) * 0.15 + strength)
+            let x = CGFloat(normalized) * size.width
+            let alpha = 0.015 + CGFloat(strength) * 0.08
+            context.setFillColor(palette[index % palette.count].withAlphaComponent(alpha).cgColor)
+            context.fill(CGRect(x: x, y: 0, width: width, height: size.height))
+        }
+        context.restoreGState()
+    }
+
+    static func drawREMSpirals(context: CGContext,
+                               size: CGSize,
+                               palette: [UIColor],
+                               profile: DreamVisualProfile,
+                               phase: Double) {
+        context.saveGState()
+        let center = CGPoint(x: size.width * 0.5, y: size.height * 0.55)
+        let layers = max(1, profile.spiralLayers)
+        for layer in 0..<layers {
+            let radius = min(size.width, size.height) * (0.15 + CGFloat(layer) * 0.12)
+            let path = UIBezierPath()
+            let steps = 140
+            for step in 0...steps {
+                let progress = Double(step) / Double(steps)
+                let angle = progress * .pi * 2 * (1.2 + Double(layer) * 0.35) + phase * 4
+                let spiralRadius = radius * CGFloat(progress)
+                let x = center.x + cos(angle) * spiralRadius
+                let y = center.y + sin(angle) * spiralRadius * 0.65
+                if step == 0 {
+                    path.move(to: CGPoint(x: x, y: y))
+                } else {
+                    path.addLine(to: CGPoint(x: x, y: y))
+                }
+            }
+            context.setStrokeColor(palette[layer % palette.count].withAlphaComponent(0.28).cgColor)
+            context.setLineWidth(CGFloat(0.8 + Double(layer) * 0.4))
+            context.addPath(path.cgPath)
+            context.strokePath()
+        }
+        context.restoreGState()
+    }
+
+    static func applyLensBloom(context: CGContext,
+                               size: CGSize,
+                               phase: Double,
+                               intensity: Double) {
         context.saveGState()
         let bloomRect = CGRect(x: 0, y: 0, width: size.width, height: size.height)
-        context.setFillColor(UIColor.white.withAlphaComponent(0.05 + CGFloat(0.02 * sin(phase * 6))).cgColor)
+        let baseAlpha = 0.04 + CGFloat(intensity) * 0.05
+        context.setFillColor(UIColor.white.withAlphaComponent(baseAlpha + CGFloat(0.02 * sin(phase * 6))).cgColor)
         context.fill(bloomRect)
         context.setBlendMode(.screen)
         let sweepY = size.height * (0.3 + CGFloat(phase) * 0.4)
-        context.setFillColor(UIColor.white.withAlphaComponent(0.12).cgColor)
+        context.setFillColor(UIColor.white.withAlphaComponent(0.08 + CGFloat(intensity) * 0.04).cgColor)
         context.fill(CGRect(x: 0, y: sweepY, width: size.width, height: 20))
         context.restoreGState()
+    }
+
+    static func applyScanlineVignette(context: CGContext,
+                                      size: CGSize,
+                                      opacity: Double) {
+        context.saveGState()
+        let lineCount = Int(size.height / 4)
+        for line in 0..<lineCount {
+            let y = CGFloat(line) * 4
+            let alpha = CGFloat(opacity) * (0.2 + 0.2 * sin(CGFloat(line) * 0.1))
+            context.setStrokeColor(UIColor.white.withAlphaComponent(alpha).cgColor)
+            context.setLineWidth(0.3)
+            context.move(to: CGPoint(x: 0, y: y))
+            context.addLine(to: CGPoint(x: size.width, y: y))
+            context.strokePath()
+        }
+        let border = CGRect(origin: .zero, size: size)
+        context.setStrokeColor(UIColor.black.withAlphaComponent(CGFloat(opacity) * 0.6).cgColor)
+        context.setLineWidth(35)
+        context.stroke(border)
+        context.restoreGState()
+    }
+
+    static func overlayChromaticAberration(context: CGContext,
+                                           size: CGSize,
+                                           palette: [UIColor],
+                                           shift: Double) {
+        guard let primary = palette.first else { return }
+        context.saveGState()
+        context.setBlendMode(.screen)
+        let offset = CGFloat(shift * 80)
+        context.setFillColor(primary.withAlphaComponent(0.06).cgColor)
+        context.fill(CGRect(x: offset, y: 0, width: size.width, height: size.height))
+        if let secondary = palette.last {
+            context.setFillColor(secondary.withAlphaComponent(0.04).cgColor)
+            context.fill(CGRect(x: -offset * 0.6, y: offset * 0.3, width: size.width, height: size.height))
+        }
+        context.restoreGState()
+    }
+
+    static func addFilmGrain(context: CGContext,
+                             size: CGSize,
+                             amount: Double,
+                             seed: UInt64) {
+        var random = DreamRandom(seed: seed == 0 ? 0x123456789ABCDEF : seed)
+        let grainCount = max(200, Int(Double(size.width * size.height) * amount * 0.12))
+        for _ in 0..<grainCount {
+            let x = CGFloat(random.nextFloat()) * size.width
+            let y = CGFloat(random.nextFloat()) * size.height
+            let alpha = 0.02 + CGFloat(random.nextFloat()) * CGFloat(amount)
+            let brightness = 0.7 + CGFloat(random.nextFloat()) * 0.3
+            context.setFillColor(UIColor(white: brightness, alpha: alpha).cgColor)
+            context.fill(CGRect(x: x, y: y, width: 1, height: 1))
+        }
     }
 }
 
