@@ -245,7 +245,7 @@ private extension SleepTrackingView {
             Text("@sleepingchart")
                 .font(.headline)
             TabView(selection: $selectedChartPage) {
-                LiveMetricChart(
+                MultiMetricChart(
                     title: "Circulatory",
                     subtitle: "Heart & HRV",
                     samples: connectivity.sleepSamples,
@@ -256,7 +256,7 @@ private extension SleepTrackingView {
                 )
                 .tag(0)
 
-                LiveMetricChart(
+                MultiMetricChart(
                     title: "Respiratory",
                     subtitle: "SpO₂ & Rate",
                     samples: connectivity.sleepSamples,
@@ -267,7 +267,7 @@ private extension SleepTrackingView {
                 )
                 .tag(1)
 
-                LiveMetricChart(
+                MultiMetricChart(
                     title: "Breath Harmony",
                     subtitle: "Calm vs. Risk",
                     samples: connectivity.sleepSamples,
@@ -280,7 +280,7 @@ private extension SleepTrackingView {
                 )
                 .tag(2)
 
-                LiveMetricChart(
+                MultiMetricChart(
                     title: "Thermoreg & Noise",
                     subtitle: "Temp & Sound",
                     samples: connectivity.sleepSamples,
@@ -395,93 +395,6 @@ private extension SleepTrackingView {
                 mediaError = error.localizedDescription
                 isProcessingAI = false
                 mediaStatus = .failed
-            }
-        }
-    }
-}
-
-private struct LiveMetricChart: View {
-    struct MetricCurve {
-        let label: String
-        let color: Color
-
-        private let valueProvider: (BiosignalDataPoint) -> Double
-
-        init(label: String, keyPath: KeyPath<BiosignalDataPoint, Double>, color: Color) {
-            self.label = label
-            self.color = color
-            self.valueProvider = { $0[keyPath: keyPath] }
-        }
-
-        init(label: String, color: Color, valueProvider: @escaping (BiosignalDataPoint) -> Double) {
-            self.label = label
-            self.color = color
-            self.valueProvider = valueProvider
-        }
-
-        func value(for point: BiosignalDataPoint) -> Double {
-            valueProvider(point)
-        }
-    }
-
-    let title: String
-    let subtitle: String
-    let samples: [BiosignalDataPoint]
-    let metrics: [MetricCurve]
-
-    private var plotSamples: [BiosignalDataPoint] {
-        Array(samples.suffix(160))
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.headline)
-            Text(subtitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(.ultraThinMaterial)
-                if plotSamples.isEmpty {
-                    Text("Waiting for live data")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Chart {
-                        ForEach(metrics, id: \.label) { metric in
-                            ForEach(plotSamples) { sample in
-                                LineMark(
-                                    x: .value("Time", sample.timestamp),
-                                    y: .value(metric.label, metric.value(for: sample))
-                                )
-                                .foregroundStyle(metric.color)
-                                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                                .interpolationMethod(.catmullRom)
-                            }
-                        }
-                    }
-                    .chartYAxis(.hidden)
-                    .chartXAxis(.hidden)
-                    .padding(12)
-                }
-            }
-            .frame(height: 200)
-            legend
-        }
-    }
-
-    private var legend: some View {
-        HStack(spacing: 12) {
-            ForEach(metrics, id: \.label) { metric in
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(metric.color)
-                        .frame(width: 10, height: 10)
-                    Text(metric.label)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
             }
         }
     }

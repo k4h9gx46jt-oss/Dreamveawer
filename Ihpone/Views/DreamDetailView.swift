@@ -8,6 +8,7 @@ struct DreamDetailView: View {
     @State private var videoError: String?
     @State private var mediaStatus: DreamMediaComposer.Status = .idle
     @State private var mediaProgress: Double = 0
+    @State private var selectedDetailChart = 0
 
     var body: some View {
         ScrollView {
@@ -49,6 +50,10 @@ struct DreamDetailView: View {
                 .padding()
                 .background(.thinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 24))
+
+                if !dream.biosignals.isEmpty {
+                    dreamMetricCarousel
+                }
             }
             .padding()
         }
@@ -123,6 +128,82 @@ private extension DreamDetailView {
             .clipShape(RoundedRectangle(cornerRadius: 24))
         }
         .disabled(isGeneratingVideo)
+    }
+
+    var dreamMetricCarousel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Dream Biofeedback")
+                .font(.headline)
+            Text("Compare how your vitals moved through the night")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TabView(selection: $selectedDetailChart) {
+                MultiMetricChart(
+                    title: "Circulation",
+                    subtitle: "Heart & HRV",
+                    samples: dream.biosignals,
+                    metrics: [
+                        .init(label: "Heart", keyPath: \.heartRate, color: .pink),
+                        .init(label: "HRV", keyPath: \.hrv, color: .blue)
+                    ],
+                    chartHeight: 180
+                )
+                .tag(0)
+
+                MultiMetricChart(
+                    title: "Respiration",
+                    subtitle: "SpO₂ & Rate",
+                    samples: dream.biosignals,
+                    metrics: [
+                        .init(label: "SpO₂", keyPath: \.spo2, color: .teal),
+                        .init(label: "Resp Rate", keyPath: \.respiratoryRate, color: .green)
+                    ],
+                    chartHeight: 180
+                )
+                .tag(1)
+
+                MultiMetricChart(
+                    title: "Calm vs Risk",
+                    subtitle: "Resp Rhythm & Apnea",
+                    samples: dream.biosignals,
+                    metrics: [
+                        .init(label: "Resp Rhythm", keyPath: \.respiratoryRate, color: .mint),
+                        .init(label: "Apnea Risk (×40)", color: .orange) { sample in
+                            sample.apneaRisk * 40
+                        }
+                    ],
+                    chartHeight: 180
+                )
+                .tag(2)
+
+                MultiMetricChart(
+                    title: "Environment",
+                    subtitle: "Temp & Noise",
+                    samples: dream.biosignals,
+                    metrics: [
+                        .init(label: "Temp", keyPath: \.wristTemperatureDelta, color: .purple),
+                        .init(label: "Noise", keyPath: \.noiseExposure, color: .yellow)
+                    ],
+                    chartHeight: 180
+                )
+                .tag(3)
+            }
+            .frame(height: 220)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+
+            HStack(spacing: 8) {
+                ForEach(0..<4) { index in
+                    Circle()
+                        .fill(index == selectedDetailChart ? Color.primary : Color.secondary.opacity(0.3))
+                        .frame(width: index == selectedDetailChart ? 10 : 8, height: index == selectedDetailChart ? 10 : 8)
+                        .animation(.easeInOut(duration: 0.2), value: selectedDetailChart)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding()
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
     func generateVideo() {
