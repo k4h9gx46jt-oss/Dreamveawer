@@ -22,6 +22,7 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
     private var lastOfflineFlushDate: Date = .distantPast
     private let offlineBatchSize = 25
     private let offlineFlushInterval: TimeInterval = 15
+    private let catchupBatchLimit = 180
 
     private override init() {
         super.init()
@@ -41,10 +42,7 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
     }
 
     func sendLiveSample(sample: WatchSleepSample, remState: REMState) {
-        var payload = basePayload(for: sample)
-        payload["event"] = "sample"
-        payload["timestamp"] = sample.timestamp.timeIntervalSince1970
-        payload["remState"] = remState.rawValue
+        let payload = encodedSamplePayload(for: sample, remState: remState)
         transmit(message: payload, allowBuffering: true)
     }
 
@@ -171,6 +169,22 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
         pendingUserInfoTransfers.append(transfer)
     }
 
+    private func handleSamplesRequest(_ payload: [String: Any]) {
+        let sinceInterval = payload["since"] as? Double ?? 0
+        let sinceDate = sinceInterval > 0 ? Date(timeIntervalSince1970: sinceInterval) : nil
+        let requested = WorkoutManager.shared.samples(after: sinceDate, limit: catchupBatchLimit)
+        guard !requested.isEmpty else { return }
+        let encoded = requested.map { sample, stage in
+            encodedSamplePayload(for: sample, remState: stage)
+        }
+        let batchPayload: [String: Any] = [
+            "event": "sampleBatch",
+            "samples": encoded,
+            "fromRequest": true
+        ]
+        transmit(message: batchPayload, allowBuffering: true)
+    }
+
         private func basePayload(for sample: WatchSleepSample) -> [String: Any] {
             [
                 "heartRate": sample.heartRate,
@@ -184,6 +198,16 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
                 "noiseExposure": sample.noiseExposure,
                 "apneaRisk": sample.apneaRisk
             ]
+        }
+
+        private func encodedSamplePayload(for sample: WatchSleepSample, remState: REMState?) -> [String: Any] {
+            var payload = basePayload(for: sample)
+            payload["event"] = "sample"
+            payload["timestamp"] = sample.timestamp.timeIntervalSince1970
+            if let remState {
+                payload["remState"] = remState.rawValue
+            }
+            return payload
         }
 }
 
@@ -217,8 +241,8 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
             if let index = pendingUserInfoTransfers.firstIndex(where: { $0 === userInfoTransfer }) {
                 pendingUserInfoTransfers.remove(at: index)
             }
-            if let error,
-               let retryPayload = userInfoTransfer.userInfo as? [String: Any] {
+            if let error {
+                let retryPayload = userInfoTransfer.userInfo
                 print("UserInfo transfer failed: \(error.localizedDescription)")
                 if retryPayload["event"] as? String == "sampleBatch",
                    let samples = retryPayload["samples"] as? [[String: Any]] {
@@ -253,6 +277,12 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
 
             if command == "watchStatusProbe" {
                 replyHandler?(currentStatusSnapshot())
+                return
+            }
+
+            if command == "samplesRequest" {
+                handleSamplesRequest(payload)
+                replyHandler?([:])
                 return
             }
 

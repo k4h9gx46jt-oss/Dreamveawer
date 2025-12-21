@@ -38,6 +38,10 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     private var mockSampleGenerator = MockSampleGenerator()
     private let liveSampleRetentionLimit = 720
     private let sampleDeduplicationThreshold: TimeInterval = 0.25
+    private var lastSampleTimestamp: Date?
+    private var lastCatchupRequestDate: Date?
+    private let sampleCatchupThreshold: TimeInterval = 6
+    private let sampleCatchupCooldown: TimeInterval = 20
 
     private override init() {
         super.init()
@@ -184,6 +188,7 @@ private extension PhoneWatchConnectivityManager {
         if isWatchReachable {
             stopMockStream()
             requestWatchStatusSnapshot()
+            requestSampleCatchupIfNeeded(reason: "reachability")
         } else if wantsLiveMirroring {
             startMockStreamIfNeeded()
         }
@@ -223,6 +228,7 @@ private extension PhoneWatchConnectivityManager {
         sleepSamples = []
         remWindows = []
         currentREMStart = nil
+        lastSampleTimestamp = nil
     }
 
     func enqueueCommandPayload(_ payload: [String: Any], using session: WCSession) {
@@ -360,6 +366,7 @@ private extension PhoneWatchConnectivityManager {
                     liveTemperatureDelta = last.wristTemperatureDelta
                     liveNoiseExposure = last.noiseExposure
                     liveApneaRisk = last.apneaRisk
+                    lastSampleTimestamp = last.timestamp
                 }
             }
             let sessionIdentifier = UUID(uuidString: payload["sessionId"] as? String ?? "")
@@ -452,6 +459,7 @@ private extension PhoneWatchConnectivityManager {
         if let session {
             refreshReachability(using: session)
         }
+        requestSampleCatchupIfNeeded(reason: "statusSnapshot")
     }
 
     func startMockStreamIfNeeded() {
@@ -488,6 +496,22 @@ private extension PhoneWatchConnectivityManager {
         updateREM(with: sample.timestamp, state: result.stage.rawValue)
     }
 
+    func requestSampleCatchupIfNeeded(reason: String) {
+        guard let session, session.isReachable else { return }
+        let tracking = remoteSessionStart != nil && remoteSessionEndedAt == nil
+        guard tracking || wantsLiveMirroring else { return }
+        let now = Date()
+        if let last = lastSampleTimestamp, now.timeIntervalSince(last) < sampleCatchupThreshold {
+            return
+        }
+        if let lastRequest = lastCatchupRequestDate, now.timeIntervalSince(lastRequest) < sampleCatchupCooldown {
+            return
+        }
+        lastCatchupRequestDate = now
+        let since = lastSampleTimestamp?.timeIntervalSince1970 ?? 0
+        sendCommandToWatch("samplesRequest", extras: ["since": since, "reason": reason])
+    }
+
     func decodeSample(from payload: [String: Any]) -> BiosignalDataPoint? {
         guard let timestamp = payload["timestamp"] as? Double,
               let heartRate = payload["heartRate"] as? Double,
@@ -520,6 +544,7 @@ private extension PhoneWatchConnectivityManager {
         liveSleepScore = sample.sleepScore
         liveNoiseExposure = sample.noiseExposure
         liveApneaRisk = sample.apneaRisk
+        lastSampleTimestamp = sample.timestamp
         if let remState {
             updateREM(with: sample.timestamp, state: remState)
         }

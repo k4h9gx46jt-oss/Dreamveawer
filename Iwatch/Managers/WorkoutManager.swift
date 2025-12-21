@@ -23,6 +23,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published private(set) var samples: [WatchSleepSample] = []
     @Published private(set) var remWindows: [REMWindow] = []
     @Published private(set) var currentREMState: REMState = .light
+    private var sampleREMStates: [UUID: REMState] = [:]
 
     private let healthStore = HKHealthStore()
     private var workoutSession: HKWorkoutSession?
@@ -58,6 +59,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         configureWorkout()
         elapsed = 0
         samples.removeAll()
+        sampleREMStates.removeAll()
         remWindows.removeAll()
         currentREMState = .light
         baselineAdvancedSignals()
@@ -114,6 +116,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         sessionStartDate = startDate
         elapsed = max(0, Date().timeIntervalSince(startDate))
         samples.removeAll()
+        sampleREMStates.removeAll()
         remWindows.removeAll()
         currentREMState = .light
         baselineAdvancedSignals()
@@ -376,12 +379,17 @@ private extension WorkoutManager {
         guard isTracking else { return }
         let sample = makeSnapshotSample()
         samples.append(sample)
-        if samples.count > 720 { samples.removeFirst() }
-        updateREM(using: sample)
-        WatchSideConnectivityManager.shared.sendLiveSample(sample: sample, remState: currentREMState)
+        if samples.count > 720 {
+            let removed = samples.removeFirst()
+            sampleREMStates.removeValue(forKey: removed.id)
+        }
+        let stage = updateREM(using: sample)
+        sampleREMStates[sample.id] = stage
+        WatchSideConnectivityManager.shared.sendLiveSample(sample: sample, remState: stage)
     }
 
-    func updateREM(using sample: WatchSleepSample) {
+    @discardableResult
+    func updateREM(using sample: WatchSleepSample) -> REMState {
         let lowHRV = sample.hrv < 35
         if sample.heartRate >= 50 && sample.heartRate <= 75 && !lowHRV {
             if currentREMState != .rem {
@@ -396,6 +404,19 @@ private extension WorkoutManager {
             currentREMState = .deep
         } else {
             currentREMState = .light
+        }
+        return currentREMState
+    }
+
+    func samples(after date: Date?, limit: Int = 240) -> [(sample: WatchSleepSample, stage: REMState)] {
+        let filtered = samples.filter { sample in
+            guard let date else { return true }
+            return sample.timestamp > date
+        }
+        let limited = filtered.suffix(limit)
+        return limited.compactMap { sample in
+            guard let stage = sampleREMStates[sample.id] else { return nil }
+            return (sample, stage)
         }
     }
 
