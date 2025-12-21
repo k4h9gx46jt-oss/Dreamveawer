@@ -11,6 +11,7 @@ final class ExtensionDelegate: NSObject, WKExtensionDelegate {
 
     func applicationDidFinishLaunching() {
         Task { @MainActor in
+            WatchSideConnectivityManager.shared.flushBufferedSamplesIfNeeded()
             WatchSideConnectivityManager.shared.sendConnectionState(.ready)
             processPendingCommands()
         }
@@ -18,6 +19,7 @@ final class ExtensionDelegate: NSObject, WKExtensionDelegate {
 
     func applicationDidBecomeActive() {
         Task { @MainActor in
+            WatchSideConnectivityManager.shared.flushBufferedSamplesIfNeeded()
             WatchSideConnectivityManager.shared.sendConnectionState(.ready)
             processPendingCommands()
         }

@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import Combine
+import WatchKit
 
 @MainActor
 final class WorkoutManager: NSObject, ObservableObject {
@@ -34,6 +35,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var lastHealthKitSampleDate: Date?
     private var sessionId = UUID()
     private let persistence = UserDefaults.standard
+    private var extendedRuntimeSession: WKExtendedRuntimeSession?
 
     private enum PersistenceKeys {
         static let tracking = "dw.watch.tracking"
@@ -70,6 +72,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
         startPushTimer()
         startScheduledSampleTimer()
+        beginExtendedRuntimeSession()
         WatchSideConnectivityManager.shared.sendSessionEvent(.started(id: sessionId, start: sessionStartDate ?? Date()))
         persistSessionState()
     }
@@ -119,6 +122,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         startElapsedTimer()
         startPushTimer()
         startScheduledSampleTimer()
+        beginExtendedRuntimeSession()
         persistSessionState()
         WatchSideConnectivityManager.shared.sendConnectionState(.tracking)
     }
@@ -195,6 +199,29 @@ final class WorkoutManager: NSObject, ObservableObject {
         scheduledSampleTimer = nil
     }
 
+    private func beginExtendedRuntimeSession() {
+        guard extendedRuntimeSession == nil else { return }
+        let session = WKExtendedRuntimeSession()
+        session.delegate = self
+        extendedRuntimeSession = session
+        session.start()
+        scheduleBackgroundRefresh()
+    }
+
+    private func endExtendedRuntimeSession() {
+        extendedRuntimeSession?.invalidate()
+        extendedRuntimeSession = nil
+    }
+
+    private func scheduleBackgroundRefresh() {
+        let preferred = Date().addingTimeInterval(90)
+        WKExtension.shared().scheduleBackgroundRefresh(withPreferredDate: preferred, userInfo: nil) { error in
+            if let error {
+                print("Background refresh error: \(error.localizedDescription)")
+            }
+        }
+    }
+
     private func completeStop(startDate: Date, endDate: Date, notifyPhone: Bool) {
         workoutSession?.end()
         builder?.endCollection(withEnd: endDate, completion: { _, _ in })
@@ -202,6 +229,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         builder = nil
         stopTimers()
         isTracking = false
+        endExtendedRuntimeSession()
         sessionStartDate = nil
         lastHealthKitSampleDate = nil
         WatchSideConnectivityManager.shared.sendSnapshot(sample: makeSnapshotSample())
@@ -290,6 +318,25 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
             lastHealthKitSampleDate = Date()
             synthesizeAdvancedSignals()
             recordSample()
+        }
+    }
+}
+
+extension WorkoutManager: WKExtendedRuntimeSessionDelegate {
+    nonisolated func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {}
+
+    nonisolated func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
+        Task { @MainActor in
+            self.scheduleBackgroundRefresh()
+        }
+    }
+
+    nonisolated func extendedRuntimeSession(_ extendedRuntimeSession: WKExtendedRuntimeSession, didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason, error: Error?) {
+        Task { @MainActor in
+            self.extendedRuntimeSession = nil
+            if self.isTracking {
+                self.beginExtendedRuntimeSession()
+            }
         }
     }
 }

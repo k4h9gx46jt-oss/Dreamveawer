@@ -16,6 +16,9 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
     private var processedCommandTokens: [String] = []
     private var processedCommandTokenSet: Set<String> = []
     private let maxCommandTokensStored = 20
+    private var bufferedSamplePayloads: [[String: Any]] = []
+    private var pendingUserInfoTransfers: [WCSessionUserInfoTransfer] = []
+    private let maxOutstandingUserInfoTransfers = 40
 
     private override init() {
         super.init()
@@ -31,7 +34,7 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
         var payload = basePayload(for: sample)
         payload["timestamp"] = Date().timeIntervalSince1970
         payload["connected"] = true
-        send(message: payload)
+        transmit(message: payload)
     }
 
     func sendLiveSample(sample: WatchSleepSample, remState: REMState) {
@@ -39,11 +42,11 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
         payload["event"] = "sample"
         payload["timestamp"] = sample.timestamp.timeIntervalSince1970
         payload["remState"] = remState.rawValue
-        send(message: payload)
+        transmit(message: payload, allowBuffering: true)
     }
 
     func sendSessionEvent(_ event: SessionEvent) {
-        send(message: event.payload)
+        transmit(message: event.payload)
     }
 
     func sendConnectionState(_ state: ConnectionState) {
@@ -52,7 +55,7 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
             "status": state.rawValue,
             "connected": state != .inactive
         ]
-        send(message: payload)
+        transmit(message: payload)
     }
 
       func requestStatusSnapshot(completion: @escaping @MainActor (WatchStatusSnapshot) -> Void) {
@@ -73,13 +76,39 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
           }, errorHandler: { _ in })
       }
 
-    private func send(message: [String: Any]) {
+    private func transmit(message: [String: Any], allowBuffering: Bool = false) {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         if session.isReachable {
             session.sendMessage(message, replyHandler: nil)
+        } else if allowBuffering {
+            bufferedSamplePayloads.append(message)
+            enqueueBackgroundTransfer(for: message)
         } else {
             try? session.updateApplicationContext(message)
+        }
+    }
+
+    func flushBufferedSamplesIfNeeded() {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.isReachable, !bufferedSamplePayloads.isEmpty else { return }
+        while !bufferedSamplePayloads.isEmpty {
+            let payload = bufferedSamplePayloads.removeFirst()
+            session.sendMessage(payload, replyHandler: nil)
+        }
+    }
+
+    private func enqueueBackgroundTransfer(for payload: [String: Any]) {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated else { return }
+        let transfer = session.transferUserInfo(payload)
+        pendingUserInfoTransfers.append(transfer)
+        if pendingUserInfoTransfers.count > maxOutstandingUserInfoTransfers,
+           let oldest = pendingUserInfoTransfers.first {
+            oldest.cancel()
+            pendingUserInfoTransfers.removeFirst()
         }
     }
 
@@ -122,6 +151,27 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
 
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String : Any]) {
         routeIncomingCommand(userInfo)
+    }
+
+    nonisolated func session(_ session: WCSession, didFinish userInfoTransfer: WCSessionUserInfoTransfer, error: Error?) {
+        Task { @MainActor in
+            if let index = pendingUserInfoTransfers.firstIndex(where: { $0 === userInfoTransfer }) {
+                pendingUserInfoTransfers.remove(at: index)
+            }
+            if let error,
+               let retryPayload = userInfoTransfer.userInfo as? [String: Any] {
+                print("UserInfo transfer failed: \(error.localizedDescription)")
+                bufferedSamplePayloads.append(retryPayload)
+            }
+        }
+    }
+
+    nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        Task { @MainActor in
+            if session.isReachable {
+                self.flushBufferedSamplesIfNeeded()
+            }
+        }
     }
 
     private nonisolated func routeIncomingCommand(_ payload: [String: Any], replyHandler: (([String: Any]) -> Void)? = nil) {

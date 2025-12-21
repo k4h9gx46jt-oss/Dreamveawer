@@ -36,6 +36,8 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     private var wantsLiveMirroring = false
     private var mockSampleTimer: Timer?
     private var mockSampleGenerator = MockSampleGenerator()
+    private let liveSampleRetentionLimit = 720
+    private let sampleDeduplicationThreshold: TimeInterval = 0.25
 
     private override init() {
         super.init()
@@ -158,6 +160,12 @@ extension PhoneWatchConnectivityManager: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String : Any]) {
         Task { @MainActor in
             process(message: applicationContext, from: session)
+        }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String : Any]) {
+        Task { @MainActor in
+            process(message: userInfo, from: session)
         }
     }
 
@@ -341,7 +349,8 @@ private extension PhoneWatchConnectivityManager {
                         apneaRisk: dict["apneaRisk"] ?? 0
                     )
                 }
-                sleepSamples = decodedSamples
+                sleepSamples = normalizedLiveSamples(decodedSamples)
+                decodedSamples = sleepSamples
                 if let last = decodedSamples.last {
                     liveSleepScore = last.sleepScore
                     liveSpO2 = last.spo2
@@ -383,8 +392,7 @@ private extension PhoneWatchConnectivityManager {
                 noiseExposure: payload["noiseExposure"] as? Double ?? liveNoiseExposure,
                 apneaRisk: payload["apneaRisk"] as? Double ?? liveApneaRisk
             )
-            sleepSamples.append(sample)
-            if sleepSamples.count > 720 { sleepSamples.removeFirst() }
+            integrateLiveSample(sample)
             liveHeartRate = heartRate
             liveHRV = hrv
             liveSpO2 = sample.spo2
@@ -484,8 +492,7 @@ private extension PhoneWatchConnectivityManager {
         }
         let result = mockSampleGenerator.nextSample()
         let sample = result.sample
-        sleepSamples.append(sample)
-        if sleepSamples.count > 720 { sleepSamples.removeFirst() }
+        integrateLiveSample(sample)
         liveHeartRate = sample.heartRate
         liveHRV = sample.hrv
         liveSpO2 = sample.spo2
@@ -497,6 +504,32 @@ private extension PhoneWatchConnectivityManager {
         liveNoiseExposure = sample.noiseExposure
         liveApneaRisk = sample.apneaRisk
         updateREM(with: sample.timestamp, state: result.stage.rawValue)
+    }
+
+    func integrateLiveSample(_ sample: BiosignalDataPoint) {
+        sleepSamples = normalizedLiveSamples(sleepSamples + [sample])
+    }
+
+    func normalizedLiveSamples(_ samples: [BiosignalDataPoint]) -> [BiosignalDataPoint] {
+        guard !samples.isEmpty else { return [] }
+        let ordered = samples.sorted { $0.timestamp < $1.timestamp }
+        var deduped: [BiosignalDataPoint] = []
+        deduped.reserveCapacity(ordered.count)
+
+        for entry in ordered {
+            if let last = deduped.last,
+               abs(entry.timestamp.timeIntervalSince(last.timestamp)) < sampleDeduplicationThreshold {
+                deduped[deduped.count - 1] = entry
+            } else {
+                deduped.append(entry)
+            }
+        }
+
+        if deduped.count > liveSampleRetentionLimit {
+            return Array(deduped.suffix(liveSampleRetentionLimit))
+        }
+
+        return deduped
     }
 }
 

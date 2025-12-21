@@ -1,0 +1,116 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════════════════════
+# SPEEDLAYER PROJECT - GIT TODAY STATISTICS
+# ═══════════════════════════════════════════════════════════════════════════════
+# This script shows git changes made today
+# Author: Jozsef Gazsik
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+NC='\033[0m'
+
+echo -e "${BLUE}════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  📊 GIT STATISTICS - TODAY'S CHANGES${NC}"
+echo -e "${BLUE}  Date: $(date '+%Y-%m-%d')${NC}"
+echo -e "${BLUE}════════════════════════════════════════════════════════${NC}"
+echo ""
+
+# Get today's date in git log format
+TODAY=$(date '+%Y-%m-%d')
+
+# Count commits today
+echo -e "${CYAN}📝 Commits Made Today:${NC}"
+COMMIT_COUNT=$(git log --since="$TODAY 00:00:00" --until="$TODAY 23:59:59" --oneline | wc -l | tr -d ' ')
+echo -e "${GREEN}  Total Commits: ${COMMIT_COUNT}${NC}"
+echo ""
+
+if [ "$COMMIT_COUNT" -gt 0 ]; then
+    echo -e "${CYAN}Commit List:${NC}"
+    git log --since="$TODAY 00:00:00" --until="$TODAY 23:59:59" --pretty=format:"%h|%s|%cr" --author="$(git config user.name)" | while IFS='|' read hash subject time; do
+        # Truncate long commit messages
+        if [ ${#subject} -gt 80 ]; then
+            subject="${subject:0:77}..."
+        fi
+        echo -e "  ${GREEN}${hash}${NC} - ${subject} ${YELLOW}(${time})${NC}"
+    done
+    echo ""
+    echo ""
+fi
+
+# Show files changed today
+echo -e "${CYAN}📁 Files Changed Today:${NC}"
+FILES_CHANGED=$(git log --since="$TODAY 00:00:00" --until="$TODAY 23:59:59" --name-only --pretty=format:"" | sort | uniq | grep -v '^$' | wc -l | tr -d ' ')
+echo -e "${GREEN}  Total Files: ${FILES_CHANGED}${NC}"
+echo ""
+
+if [ "$FILES_CHANGED" -gt 0 ]; then
+    echo -e "${CYAN}Changed Files:${NC}"
+    git log --since="$TODAY 00:00:00" --until="$TODAY 23:59:59" --name-only --pretty=format:"" | sort | uniq | grep -v '^$' | while read file; do
+        echo -e "  ${GREEN}•${NC} $file"
+    done
+    echo ""
+    echo ""
+fi
+
+# Show stats by file type
+echo -e "${CYAN}📊 Changes by File Type:${NC}"
+git log --since="$TODAY 00:00:00" --until="$TODAY 23:59:59" --name-only --pretty=format:"" | grep -v '^$' | sed 's/.*\.//' | sort | uniq -c | sort -rn | while read count ext; do
+    echo -e "  ${GREEN}${count}${NC} files - .${ext}"
+done
+echo ""
+echo ""
+
+# Show insertion/deletion stats
+echo -e "${CYAN}📈 Code Statistics (Today):${NC}"
+STATS=$(git log --since="$TODAY 00:00:00" --until="$TODAY 23:59:59" --shortstat | grep -E "fil(e|es) changed" | awk '{files+=$1; inserted+=$4; deleted+=$6} END {print files" "inserted" "deleted}')
+FILES=$(echo $STATS | awk '{print $1}')
+INSERTED=$(echo $STATS | awk '{print $2}')
+DELETED=$(echo $STATS | awk '{print $3}')
+
+echo -e "${GREEN}  Files Changed: ${FILES:-0}${NC}"
+echo -e "${GREEN}  Lines Inserted: ${INSERTED:-0}${NC}"
+echo -e "${RED}  Lines Deleted: ${DELETED:-0}${NC}"
+echo ""
+
+# Show current branch
+echo -e "${CYAN}🌿 Current Branch:${NC}"
+CURRENT_BRANCH=$(git branch --show-current)
+echo -e "  ${GREEN}${CURRENT_BRANCH}${NC}"
+echo ""
+
+# Show uncommitted changes
+echo -e "${CYAN}⚠️  Uncommitted Changes:${NC}"
+UNCOMMITTED=$(git status --porcelain | wc -l | tr -d ' ')
+if [ "$UNCOMMITTED" -gt 0 ]; then
+    echo -e "${YELLOW}  ${UNCOMMITTED} files have uncommitted changes${NC}"
+    echo ""
+    git status --short | while read status file; do
+        case "$status" in
+            M*) echo -e "  ${YELLOW}M${NC} $file" ;;
+            A*) echo -e "  ${GREEN}A${NC} $file" ;;
+            D*) echo -e "  ${RED}D${NC} $file" ;;
+            ??*) echo -e "  ${CYAN}?${NC} $file" ;;
+            *) echo -e "  ${status} $file" ;;
+        esac
+    done
+else
+    echo -e "${GREEN}  No uncommitted changes${NC}"
+fi
+echo ""
+
+# Show recent branches worked on today
+echo -e "${CYAN}🌱 Branches Worked On Today:${NC}"
+git for-each-ref --sort=-committerdate refs/heads/ --format='%(committerdate:short) %(refname:short)' | grep "^$TODAY" | while read date branch; do
+    echo -e "  ${GREEN}•${NC} $branch"
+done
+echo ""
+
+echo -e "${BLUE}════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}✅ Today's Git Statistics Complete!${NC}"
+echo -e "${BLUE}════════════════════════════════════════════════════════${NC}"
