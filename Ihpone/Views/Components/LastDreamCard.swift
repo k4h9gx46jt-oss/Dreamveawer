@@ -11,7 +11,7 @@ struct LastDreamCard: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.9))
                 Spacer()
-                Text(dream.startedAt, style: .relative)
+                Text(dream.durationFormatted)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.8))
             }
@@ -64,5 +64,19 @@ private extension SleepData {
     var durationMinutes: Double {
         let interval = endedAt.timeIntervalSince(startedAt)
         return (interval.truncatingRemainder(dividingBy: 3600)) / 60
+    }
+
+    var durationFormatted: String {
+        let interval = max(endedAt.timeIntervalSince(startedAt), 0)
+        let totalSeconds = Int(interval.rounded())
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+
+        return "\(minutes) min, \(seconds) secs"
     }
 }

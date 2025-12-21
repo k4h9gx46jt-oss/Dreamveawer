@@ -67,6 +67,12 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
         resetLiveMetrics()
     }
 
+    func acknowledgeLocalStop(sessionId: UUID, endedAt: Date) {
+        remoteSessionId = sessionId
+        remoteSessionEndedAt = endedAt
+        remoteSessionStart = nil
+    }
+
     func startSleepSession(id: UUID) {
         sendCommandToWatch("startSleep", extras: ["sessionId": id.uuidString])
     }

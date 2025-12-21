@@ -153,6 +153,7 @@ struct SleepTrackingView: View {
         if !triggeredByRemote {
             connectivity.stopMirroringLiveData()
             connectivity.stopSleepSession(id: session.id)
+            connectivity.acknowledgeLocalStop(sessionId: session.id, endedAt: endDate)
         }
         var completedSession = session
         completedSession.biosignals = samples
