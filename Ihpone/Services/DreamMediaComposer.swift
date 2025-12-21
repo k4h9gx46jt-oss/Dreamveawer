@@ -287,10 +287,13 @@ private enum VideoPlaceholderWriter {
         let size = CGSize(width: width, height: height)
         drawLightHaze(context: context, size: size, phase: phase)
         drawAuroraBands(context: context, size: size, palette: uiColors, phase: phase)
+        drawOrbitalTrails(context: context, size: size, palette: uiColors, phase: phase)
         drawDreamRibbons(context: context, size: size, palette: uiColors, phase: phase)
         drawPulseNebula(context: context, size: size, palette: uiColors, phase: phase)
+        drawStarlightField(context: context, size: size, palette: uiColors, phase: phase)
         drawSpecularHighlights(context: context, size: size, palette: uiColors, phase: phase)
         overlayGlyphGrid(context: context, size: size, phase: phase)
+        overlayStaffLines(context: context, size: size, phase: phase)
         applyLensBloom(context: context, size: size, phase: phase)
 
         return buffer
@@ -353,6 +356,65 @@ private enum VideoPlaceholderWriter {
                                            width: radius * 2,
                                            height: radius * 2))
         }
+        context.restoreGState()
+    }
+
+    static func drawOrbitalTrails(context: CGContext, size: CGSize, palette: [UIColor], phase: Double) {
+        context.saveGState()
+        let trailCount = 5
+        for index in 0..<trailCount {
+            let normalized = Double(index) / Double(trailCount)
+            let radius = size.width * 0.18 + CGFloat(normalized) * size.width * 0.12
+            let center = CGPoint(x: size.width * 0.5 + CGFloat(sin(phase * 1.3 + normalized * 2)) * 40,
+                                 y: size.height * 0.55 + CGFloat(cos(phase * 1.1 + normalized * 2)) * 20)
+            let path = UIBezierPath(ovalIn: CGRect(x: center.x - radius,
+                                                   y: center.y - radius * 0.4,
+                                                   width: radius * 2,
+                                                   height: radius * 0.8))
+            context.setStrokeColor(palette[index % palette.count].withAlphaComponent(0.25).cgColor)
+            context.setLineWidth(CGFloat(0.8 + normalized))
+            context.addPath(path.cgPath)
+            context.strokePath()
+
+            let bodyAngle = CGFloat(phase * 4 + normalized * 6)
+            let dotX = center.x + cos(bodyAngle) * radius
+            let dotY = center.y + sin(bodyAngle) * radius * 0.4
+            let dotRect = CGRect(x: dotX - 3, y: dotY - 3, width: 6, height: 6)
+            context.setFillColor(UIColor.white.withAlphaComponent(0.4).cgColor)
+            context.fillEllipse(in: dotRect)
+        }
+        context.restoreGState()
+    }
+
+    static func drawStarlightField(context: CGContext, size: CGSize, palette: [UIColor], phase: Double) {
+        context.saveGState()
+        let starCount = 70
+        for index in 0..<starCount {
+            let t = Double(index) / Double(starCount)
+            let flicker = CGFloat(0.15 + 0.1 * sin(phase * 5 + t * 40))
+            let x = CGFloat((sin(t * 89 + phase * 1.3) + 1) * 0.5) * size.width
+            let y = CGFloat((cos(t * 53 + phase * 0.9) + 1) * 0.5) * size.height
+            let rect = CGRect(x: x, y: y, width: 1.5 + flicker, height: 1.5 + flicker)
+            let color = palette[index % palette.count].withAlphaComponent(0.25 + 0.2 * flicker).cgColor
+            context.setFillColor(color)
+            context.fillEllipse(in: rect)
+        }
+        context.restoreGState()
+    }
+
+    static func overlayStaffLines(context: CGContext, size: CGSize, phase: Double) {
+        context.saveGState()
+        context.setStrokeColor(UIColor.white.withAlphaComponent(0.08).cgColor)
+        context.setLineWidth(0.6)
+        let staffHeight = size.height * 0.4
+        let spacing = staffHeight / 10
+        let offsetY = size.height * 0.15 + CGFloat(sin(phase * 2)) * 12
+        for line in 0..<5 {
+            let y = offsetY + CGFloat(line) * spacing
+            context.move(to: CGPoint(x: 0, y: y))
+            context.addLine(to: CGPoint(x: size.width, y: y))
+        }
+        context.strokePath()
         context.restoreGState()
     }
 
@@ -460,6 +522,8 @@ private enum AudioPlaceholderWriter {
             [2, 9, 14, 19],
             [0, 5, 10, 17]
         ]
+        let melodyPhrase: [Float] = [0, 2, 4, 5, 7, 5, 4, 2]
+        let counterPhrase: [Float] = [12, 11, 9, 7, 9, 11, 12, 14]
         let padDetune: [Float] = [-0.18, 0.07, 0.21]
         var bassFilter = OnePoleFilter(coefficient: 0.018)
         var airFilter = OnePoleFilter(coefficient: 0.12)
@@ -497,11 +561,22 @@ private enum AudioPlaceholderWriter {
                                time: t * (1.3 + 0.2 * sin(t * 0.25)),
                                vibrato: shimmerLFO * 0.05) * 0.22 * arpGate
 
-            let choirFreq = semitone(base: base * 0.5, semitone: chord[0])
-            let choir = waveform(.sine,
-                                 frequency: choirFreq,
-                                 time: t,
-                                 vibrato: sin(t * 0.05) * 0.4) * 0.28
+            let melodyStep = Int(progress * Float(melodyPhrase.count))
+            let melodyNote = melodyPhrase[melodyStep % melodyPhrase.count]
+            let melodyFreq = semitone(base: base, semitone: melodyNote + 12)
+            let melodyEnv = classicalPhraseEnvelope(progress: progress)
+            let melody = waveform(.sine,
+                                   frequency: melodyFreq,
+                                   time: t + 0.001 * sin(t * 0.6),
+                                   vibrato: 0.02 * sin(t * 0.3)) * 0.32 * melodyEnv
+
+            let counterIndex = (melodyStep + sceneIndex) % counterPhrase.count
+            let counterFreq = semitone(base: base * 0.5, semitone: counterPhrase[counterIndex])
+            let counterEnv = 0.6 + 0.4 * sin(progress * .pi)
+            let counter = waveform(.triangle,
+                                   frequency: counterFreq,
+                                   time: t * 0.8,
+                                   vibrato: macroLFO * 0.05) * 0.22 * counterEnv
 
             let bassFreq = semitone(base: base * 0.5, semitone: chord[0] - 12)
             let rawBass = waveform(.saw,
@@ -516,16 +591,29 @@ private enum AudioPlaceholderWriter {
                                        vibrato: shimmerLFO * 0.1) * 0.18
             let shimmer = shimmerFilter.process(shimmerHarm)
 
-            let noise = (random.nextFloat() * 2 - 1) * (0.015 + 0.01 * abs(macroLFO))
-            let air = airFilter.process(noise)
-            let texture = textureFilter.process((random.nextFloat() * 2 - 1) * 0.02 + sin(t * 0.33) * 0.015)
+            let choirFreq = semitone(base: base * 0.5, semitone: chord[0])
+            let choir = waveform(.sine,
+                                 frequency: choirFreq,
+                                 time: t,
+                                 vibrato: sin(t * 0.05) * 0.3) * 0.2
 
-            let pulse = sin(Float.pi * 2 * 0.5 * t) * (0.08 + 0.04 * sin(t * 0.9))
+            let harpBeat = fmod(progress * 2, 1)
+            let harpEnv = pluckEnvelope(harpBeat)
+            let harpFreq = semitone(base: base * 2.8, semitone: chord[arpIndex])
+            let harp = waveform(.saw,
+                                frequency: harpFreq,
+                                time: t,
+                                vibrato: 0) * 0.12 * harpEnv
+
+            let texture = textureFilter.process((random.nextFloat() * 2 - 1) * 0.012 + sin(t * 0.33) * 0.01)
+            let air = airFilter.process((random.nextFloat() * 2 - 1) * 0.01)
+
+            let pulse = sin(Float.pi * 2 * 0.33 * t) * 0.04
 
             let attack = min(1, t / 3)
             let release = min(1, max(0, (totalDuration - t) / 3.5))
-            let sceneAccent = 0.75 + 0.25 * sin(Float(sceneIndex) * 0.7)
-            var signal = (pad + arp + bass + choir + shimmer + air + texture + pulse) * attack * release * sceneAccent
+            let sceneAccent = 0.78 + 0.22 * sin(Float(sceneIndex) * 0.7)
+            var signal = (pad + arp + bass + choir + melody + counter + shimmer + harp + texture + air + pulse) * attack * release * sceneAccent
             let wet = signal
             signal += shimmerDelay.process(wet * 0.6)
             signal += cloudDelay.process(wet * 0.4)
@@ -568,6 +656,16 @@ private func smoothGate(_ progress: Float) -> Float {
 
 private func softClip(_ value: Float) -> Float {
     tanhf(value * 0.9)
+}
+
+private func classicalPhraseEnvelope(progress: Float) -> Float {
+    let rise = min(progress / 0.25, 1)
+    let fall = min(max(0, 1 - progress) / 0.35, 1)
+    return max(0, rise * fall)
+}
+
+private func pluckEnvelope(_ progress: Float) -> Float {
+    max(0, powf(1 - progress, 3))
 }
 
 private struct DreamDelay {
