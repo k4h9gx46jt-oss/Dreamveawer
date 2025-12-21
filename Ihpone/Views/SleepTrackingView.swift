@@ -291,7 +291,7 @@ private extension SleepTrackingView {
                 )
                 .tag(3)
             }
-            .frame(height: 240)
+            .frame(height: 300)
             .tabViewStyle(.page(indexDisplayMode: .never))
             HStack(spacing: 8) {
                 ForEach(0..<4) { index in
