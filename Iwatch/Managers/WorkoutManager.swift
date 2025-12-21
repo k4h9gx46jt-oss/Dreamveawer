@@ -31,6 +31,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var scheduledSampleTimer: Timer?
     private let pushInterval: TimeInterval = 5
     private let scheduledSampleInterval: TimeInterval = 1
+    private var lastHealthKitSampleDate: Date?
     private var sessionId = UUID()
     private let persistence = UserDefaults.standard
 
@@ -58,6 +59,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         remWindows.removeAll()
         currentREMState = .light
         baselineAdvancedSignals()
+        lastHealthKitSampleDate = nil
         sessionId = remoteSessionId ?? UUID()
         sessionStartDate = Date()
         isTracking = true
@@ -112,6 +114,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         remWindows.removeAll()
         currentREMState = .light
         baselineAdvancedSignals()
+        lastHealthKitSampleDate = nil
         isTracking = true
         startElapsedTimer()
         startPushTimer()
@@ -200,6 +203,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         stopTimers()
         isTracking = false
         sessionStartDate = nil
+        lastHealthKitSampleDate = nil
         WatchSideConnectivityManager.shared.sendSnapshot(sample: makeSnapshotSample())
         if notifyPhone {
             WatchSideConnectivityManager.shared.sendSessionEvent(.ended(id: sessionId, start: startDate, end: endDate, samples: samples))
@@ -283,6 +287,7 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
                let value = statistics.mostRecentQuantity()?.doubleValue(for: HKUnit.decibelAWeightedSoundPressureLevel()) {
                 currentNoiseExposure = value
             }
+            lastHealthKitSampleDate = Date()
             synthesizeAdvancedSignals()
             recordSample()
         }
@@ -293,8 +298,30 @@ private extension WorkoutManager {
     @MainActor
     func emitScheduledSample() {
         guard isTracking else { return }
+        let isHealthKitStale: Bool
+        if let lastHealthKitSampleDate {
+            isHealthKitStale = Date().timeIntervalSince(lastHealthKitSampleDate) >= scheduledSampleInterval
+        } else {
+            isHealthKitStale = true
+        }
+        if isHealthKitStale {
+            synthesizeCoreCardioSignals()
+        }
         synthesizeAdvancedSignals()
         recordSample()
+    }
+
+    func synthesizeCoreCardioSignals() {
+        let baselineHeart = currentHeartRate == 0 ? 62 : currentHeartRate
+        let elapsedSeconds = Date().timeIntervalSince(sessionStartDate ?? Date())
+        let breathingDrift = sin(elapsedSeconds / 40) * 1.5
+        let randomDrift = Double.random(in: -2.2...2.2)
+        currentHeartRate = clamp(baselineHeart + breathingDrift + randomDrift, low: 48, high: 96)
+
+        let baselineHRV = currentHRV == 0 ? 55 : currentHRV
+        let recoveryInfluence = (60 - currentHeartRate) * 0.18
+        let randomHRV = Double.random(in: -3.0...3.0)
+        currentHRV = clamp(baselineHRV + recoveryInfluence + randomHRV, low: 25, high: 95)
     }
 
     func recordSample() {
@@ -341,6 +368,8 @@ private extension WorkoutManager {
     }
 
     func baselineAdvancedSignals() {
+        currentHeartRate = 62
+        currentHRV = 55
         currentSpO2 = 98
         currentRespiratoryRate = 14
         currentECGConfidence = 0.95
