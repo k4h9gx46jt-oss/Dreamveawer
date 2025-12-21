@@ -111,10 +111,12 @@ private extension DreamMediaComposer {
                          dream: SleepData,
                          progressHandler: (@Sendable (Double) -> Void)?) async throws -> URL {
         let fileURL = cache.makeURL(fileName: "\(dream.id.uuidString)-score", fileExtension: "caf")
+        let scoreProfile = DreamScoreProfile(dream: dream, prompt: prompt)
         try AudioPlaceholderWriter.write(
             to: fileURL,
             duration: min(prompt.profile.totalDuration, 60),
-            baseFrequency: prompt.baseFrequency
+            baseFrequency: prompt.baseFrequency,
+            profile: scoreProfile
         )
         progressHandler?(0.8)
         return fileURL
@@ -195,6 +197,102 @@ private struct DreamMediaPrompt {
         self.soundtrackLabel = "REM \(dream.mood.displayName) score"
         self.preview = "REM energy \(Int(profile.intensityScore * 100))% • mood \(String(format: "%.1f", profile.moodPolarity))"
         self.baseFrequency = 220 + Double(profile.moodPolarity * 60)
+    }
+}
+
+private struct DreamScoreProfile {
+    let progression: [[Float]]
+    let melody: [Float]
+    let countermelody: [Float]
+    let ornament: [Float]
+    let padSpread: [Float]
+    let sceneLength: Float
+    let rubatoDepth: Float
+    let ornamentChance: Float
+    let harpBrightness: Float
+    let stringSwell: Float
+    let textureLevel: Float
+    let noiseFloor: Float
+    let seed: UInt64
+
+    init(dream: SleepData, prompt: DreamMediaPrompt) {
+        let polarity = Float(prompt.profile.moodPolarity)
+        let intensity = Float(prompt.profile.intensityScore)
+        let motion = Float(prompt.motionEnergy)
+        let noise = Float(prompt.profile.noiseSpikeCount)
+
+        seed = makeSeed(from: dream.id)
+
+        let classicalMajor: [[Float]] = [[0, 4, 7, 12], [7, 11, 14, 19], [5, 9, 12, 17], [0, 4, 7, 12]]
+        let dramaticMinor: [[Float]] = [[0, 7, 10, 15], [-5, 2, 7, 12], [3, 10, 15, 19], [-2, 5, 9, 14]]
+        let celestial: [[Float]] = [[0, 4, 6, 11], [5, 9, 13, 17], [2, 7, 11, 16], [-2, 4, 9, 14]]
+        let restless: [[Float]] = [[0, 7, 12, 19], [-4, 3, 7, 12], [1, 8, 12, 17], [-2, 4, 9, 14]]
+
+        let baseSets: ([[Float]], [Float], [Float], [Float])
+        switch dream.mood {
+        case .peaceful, .calm:
+            baseSets = (classicalMajor,
+                        [0, 2, 4, 7, 9, 7, 4, 2],
+                        [12, 11, 9, 7, 9, 11, 12, 14],
+                        [5, 7, 9, 10, 9, 7])
+        case .ethereal:
+            baseSets = (celestial,
+                        [0, 4, 6, 7, 9, 11, 9, 7],
+                        [11, 9, 7, 6, 7, 9, 11, 13],
+                        [9, 11, 13, 14, 13, 11])
+        case .intense, .turbulent:
+            baseSets = (dramaticMinor,
+                        [0, 3, 5, 7, 8, 7, 5, 3],
+                        [12, 10, 8, 7, 8, 10, 12, 15],
+                        [7, 8, 10, 12, 10, 8])
+        case .chaotic:
+            baseSets = (restless,
+                        [0, 3, 1, 5, 7, 4, 6, 2],
+                        [12, 14, 11, 9, 7, 9, 11, 13],
+                        [2, 5, 8, 11, 8, 5])
+        }
+
+        let rotationMelody = Int(seed % UInt64(max(baseSets.1.count, 1)))
+        let rotationCounter = Int((seed >> 5) % UInt64(max(baseSets.2.count, 1)))
+        let rotationOrnament = Int((seed >> 9) % UInt64(max(baseSets.3.count, 1)))
+        let rotationProg = Int((seed >> 13) % UInt64(max(baseSets.0.count, 1)))
+
+        progression = Self.rotated(baseSets.0, offset: rotationProg)
+        melody = Self.rotated(baseSets.1, offset: rotationMelody)
+        countermelody = Self.rotated(baseSets.2, offset: rotationCounter)
+        ornament = Self.rotated(baseSets.3, offset: rotationOrnament)
+
+        padSpread = [
+            -0.18 - intensity * 0.05,
+            0.02 + polarity * 0.04,
+            0.18 + intensity * 0.09
+        ]
+
+        sceneLength = max(3.8, min(7.5, 4.4 + motion * 1.3 + intensity * 2.6))
+        rubatoDepth = max(0.25, min(0.85, 0.3 + motion * 0.28 + abs(polarity) * 0.18))
+        ornamentChance = max(0.05, min(0.6, 0.12 + intensity * 0.3 + abs(polarity) * 0.2))
+        harpBrightness = max(0.6, min(1.35, 0.85 + polarity * 0.25 + motion * 0.1))
+        stringSwell = max(0.45, min(1.2, 0.55 + motion * 0.35 + intensity * 0.15))
+        textureLevel = max(0.004, min(0.02, 0.006 + noise * 0.001 + intensity * 0.006))
+        noiseFloor = max(0.002, min(0.008, 0.003 + noise * 0.0008 + intensity * 0.0008))
+    }
+
+    private static func rotated(_ values: [Float], offset: Int) -> [Float] {
+        guard !values.isEmpty else { return [] }
+        let normalized = ((offset % values.count) + values.count) % values.count
+        if normalized == 0 { return values }
+        let head = Array(values[normalized...])
+        let tail = Array(values[..<normalized])
+        return head + tail
+    }
+
+    private static func rotated(_ values: [[Float]], offset: Int) -> [[Float]] {
+        guard !values.isEmpty else { return [] }
+        let normalized = ((offset % values.count) + values.count) % values.count
+        if normalized == 0 { return values }
+        let head = Array(values[normalized...])
+        let tail = Array(values[..<normalized])
+        return head + tail
     }
 }
 
@@ -503,7 +601,10 @@ private enum VideoPlaceholderWriter {
 }
 
 private enum AudioPlaceholderWriter {
-    static func write(to url: URL, duration: TimeInterval, baseFrequency: Double) throws {
+    static func write(to url: URL,
+                      duration: TimeInterval,
+                      baseFrequency: Double,
+                      profile: DreamScoreProfile) throws {
         let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1)!
         let file = try AVAudioFile(forWriting: url, settings: format.settings)
         let totalFrames = AVAudioFrameCount(max(1, Int(duration * format.sampleRate)))
@@ -515,23 +616,29 @@ private enum AudioPlaceholderWriter {
         let sampleRate = Float(format.sampleRate)
         let totalDuration = max(Float(duration), 0.1)
         let base = Float(baseFrequency)
-        let sceneLength: Float = 5.5
-        let progression: [[Float]] = [
-            [0, 7, 12, 19],
-            [-3, 4, 9, 14],
-            [2, 9, 14, 19],
-            [0, 5, 10, 17]
-        ]
-        let melodyPhrase: [Float] = [0, 2, 4, 5, 7, 5, 4, 2]
-        let counterPhrase: [Float] = [12, 11, 9, 7, 9, 11, 12, 14]
-        let padDetune: [Float] = [-0.18, 0.07, 0.21]
+        let sceneLength = max(3.5, profile.sceneLength)
+        let progression: [[Float]] = profile.progression.isEmpty ? [[0, 7, 12, 19]] : profile.progression
+        let melodyPhrase: [Float] = profile.melody.isEmpty ? [0, 2, 4, 5, 7, 5, 4, 2] : profile.melody
+        let counterPhrase: [Float] = profile.countermelody.isEmpty ? [12, 11, 9, 7, 9, 11, 12, 14] : profile.countermelody
+        let ornamentPhrase: [Float] = profile.ornament.isEmpty ? [5, 7, 9, 10, 9, 7] : profile.ornament
+        let padDetune: [Float] = profile.padSpread.isEmpty ? [-0.18, 0.07, 0.21] : profile.padSpread
+        let rubatoDepth = profile.rubatoDepth
+        let ornamentChance = min(max(profile.ornamentChance, 0), 0.75)
+        let stringSwell = profile.stringSwell
+        let harpBrightness = profile.harpBrightness
+        let textureLevel = profile.textureLevel
+        let noiseFloor = profile.noiseFloor
         var bassFilter = OnePoleFilter(coefficient: 0.018)
         var airFilter = OnePoleFilter(coefficient: 0.12)
         var shimmerFilter = OnePoleFilter(coefficient: 0.05)
         var textureFilter = OnePoleFilter(coefficient: 0.08)
-        var shimmerDelay = DreamDelay(sampleRate: sampleRate, time: 0.38, feedback: 0.45)
-        var cloudDelay = DreamDelay(sampleRate: sampleRate, time: 0.63, feedback: 0.58)
-        var random = DreamRandom(seed: UInt64(bitPattern: Int64(baseFrequency * 1000)))
+        var shimmerDelay = DreamDelay(sampleRate: sampleRate,
+                                      time: 0.32 + 0.12 * rubatoDepth,
+                                      feedback: 0.45 + 0.05 * rubatoDepth)
+        var cloudDelay = DreamDelay(sampleRate: sampleRate,
+                                    time: 0.58 + 0.08 * stringSwell,
+                                    feedback: 0.54)
+        var random = DreamRandom(seed: profile.seed)
 
         for frame in 0..<Int(totalFrames) {
             let t = Float(frame) / sampleRate
@@ -540,9 +647,10 @@ private enum AudioPlaceholderWriter {
             let chord = progression[sceneIndex % progression.count]
             let progress = scenePosition - floor(scenePosition)
 
-            let macroLFO = sin(t * 0.12)
-            let shimmerLFO = sin(t * 1.7)
-            let wow = 1 + 0.002 * sin(t * 0.4 + sin(t * 0.07))
+            let macroLFO = sin(t * (0.1 + rubatoDepth * 0.2))
+            let shimmerLFO = sin(t * (1.5 + rubatoDepth * 0.45))
+            let wow = 1 + (0.0015 + rubatoDepth * 0.001) * sin(t * 0.35 + sin(t * 0.08))
+            let padGain = 0.05 + stringSwell * 0.05
             let pad = padDetune.reduce(Float(0)) { sum, detune in
                 let spread = chord.reduce(Float(0)) { chordSum, interval in
                     chordSum + waveform(.sine,
@@ -550,7 +658,7 @@ private enum AudioPlaceholderWriter {
                                          time: t + detune * 0.002,
                                          vibrato: macroLFO * 0.2)
                 }
-                return sum + spread * 0.08
+                return sum + spread * padGain
             }
 
             let arpIndex = Int(progress * Float(chord.count * 2)) % chord.count
@@ -559,7 +667,7 @@ private enum AudioPlaceholderWriter {
             let arp = waveform(.triangle,
                                frequency: arpFreq,
                                time: t * (1.3 + 0.2 * sin(t * 0.25)),
-                               vibrato: shimmerLFO * 0.05) * 0.22 * arpGate
+                               vibrato: shimmerLFO * 0.05) * (0.18 + stringSwell * 0.05) * arpGate
 
             let melodyStep = Int(progress * Float(melodyPhrase.count))
             let melodyNote = melodyPhrase[melodyStep % melodyPhrase.count]
@@ -568,7 +676,7 @@ private enum AudioPlaceholderWriter {
             let melody = waveform(.sine,
                                    frequency: melodyFreq,
                                    time: t + 0.001 * sin(t * 0.6),
-                                   vibrato: 0.02 * sin(t * 0.3)) * 0.32 * melodyEnv
+                                   vibrato: 0.02 * sin(t * 0.3)) * (0.28 + harpBrightness * 0.04) * melodyEnv
 
             let counterIndex = (melodyStep + sceneIndex) % counterPhrase.count
             let counterFreq = semitone(base: base * 0.5, semitone: counterPhrase[counterIndex])
@@ -576,7 +684,7 @@ private enum AudioPlaceholderWriter {
             let counter = waveform(.triangle,
                                    frequency: counterFreq,
                                    time: t * 0.8,
-                                   vibrato: macroLFO * 0.05) * 0.22 * counterEnv
+                                   vibrato: macroLFO * 0.05) * (0.18 + stringSwell * 0.06) * counterEnv
 
             let bassFreq = semitone(base: base * 0.5, semitone: chord[0] - 12)
             let rawBass = waveform(.saw,
@@ -595,7 +703,7 @@ private enum AudioPlaceholderWriter {
             let choir = waveform(.sine,
                                  frequency: choirFreq,
                                  time: t,
-                                 vibrato: sin(t * 0.05) * 0.3) * 0.2
+                                 vibrato: sin(t * 0.05) * 0.3) * (0.16 + stringSwell * 0.05)
 
             let harpBeat = fmod(progress * 2, 1)
             let harpEnv = pluckEnvelope(harpBeat)
@@ -603,21 +711,36 @@ private enum AudioPlaceholderWriter {
             let harp = waveform(.saw,
                                 frequency: harpFreq,
                                 time: t,
-                                vibrato: 0) * 0.12 * harpEnv
+                                vibrato: 0) * (0.1 * harpBrightness) * harpEnv
 
-            let texture = textureFilter.process((random.nextFloat() * 2 - 1) * 0.012 + sin(t * 0.33) * 0.01)
-            let air = airFilter.process((random.nextFloat() * 2 - 1) * 0.01)
+            var ornamentVoice: Float = 0
+            if ornamentChance > 0 {
+                let ornamentBeat = fmod(progress * 2.5 + Float(sceneIndex) * 0.17, 1)
+                if ornamentBeat < ornamentChance {
+                    let ornamentStep = Int(progress * Float(ornamentPhrase.count))
+                    let ornamentNote = ornamentPhrase[ornamentStep % ornamentPhrase.count]
+                    let ornamentFreq = semitone(base: base * 3, semitone: ornamentNote)
+                    let ornamentEnv = pluckEnvelope(ornamentBeat / max(ornamentChance, 0.001))
+                    ornamentVoice = waveform(.triangle,
+                                             frequency: ornamentFreq,
+                                             time: t * (1.5 + rubatoDepth * 0.3),
+                                             vibrato: shimmerLFO * 0.04) * 0.14 * ornamentEnv
+                }
+            }
+
+            let texture = textureFilter.process((random.nextFloat() * 2 - 1) * textureLevel + sin(t * 0.33) * textureLevel * 0.8)
+            let air = airFilter.process((random.nextFloat() * 2 - 1) * (textureLevel * 0.6))
 
             let pulse = sin(Float.pi * 2 * 0.33 * t) * 0.04
 
             let attack = min(1, t / 3)
             let release = min(1, max(0, (totalDuration - t) / 3.5))
-            let sceneAccent = 0.78 + 0.22 * sin(Float(sceneIndex) * 0.7)
-            var signal = (pad + arp + bass + choir + melody + counter + shimmer + harp + texture + air + pulse) * attack * release * sceneAccent
+            let sceneAccent = min(1.2, max(0.55, 0.72 + 0.18 * sin(Float(sceneIndex) * 0.7) + rubatoDepth * 0.15))
+            var signal = (pad + arp + bass + choir + melody + counter + shimmer + harp + ornamentVoice + texture + air + pulse) * attack * release * sceneAccent
             let wet = signal
             signal += shimmerDelay.process(wet * 0.6)
             signal += cloudDelay.process(wet * 0.4)
-            let hiss = (random.nextFloat() * 2 - 1) * 0.004
+            let hiss = (random.nextFloat() * 2 - 1) * noiseFloor
             channelData[frame] = softClip(signal + hiss)
         }
         try file.write(from: buffer)
@@ -709,6 +832,17 @@ private struct DreamRandom {
         let result = Float((state >> 33) & 0xFFFFFFFF) / Float(UInt32.max)
         return result
     }
+}
+
+private func makeSeed(from uuid: UUID) -> UInt64 {
+    var hash: UInt64 = 0xcbf29ce484222325
+    withUnsafeBytes(of: uuid.uuid) { bytes in
+        for byte in bytes {
+            hash ^= UInt64(byte)
+            hash &*= 0x100000001b3
+        }
+    }
+    return hash
 }
 
 private func clamp(_ value: Double, low: Double, high: Double) -> Double {
