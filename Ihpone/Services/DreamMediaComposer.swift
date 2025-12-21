@@ -286,8 +286,12 @@ private enum VideoPlaceholderWriter {
 
         let size = CGSize(width: width, height: height)
         drawLightHaze(context: context, size: size, phase: phase)
+        drawAuroraBands(context: context, size: size, palette: uiColors, phase: phase)
         drawDreamRibbons(context: context, size: size, palette: uiColors, phase: phase)
+        drawPulseNebula(context: context, size: size, palette: uiColors, phase: phase)
         drawSpecularHighlights(context: context, size: size, palette: uiColors, phase: phase)
+        overlayGlyphGrid(context: context, size: size, phase: phase)
+        applyLensBloom(context: context, size: size, phase: phase)
 
         return buffer
     }
@@ -351,6 +355,89 @@ private enum VideoPlaceholderWriter {
         }
         context.restoreGState()
     }
+
+    static func drawAuroraBands(context: CGContext, size: CGSize, palette: [UIColor], phase: Double) {
+        context.saveGState()
+        let layers = 4
+        for index in 0..<layers {
+            let hueShift = Double(index) / Double(layers)
+            let color = palette[index % palette.count].withAlphaComponent(0.35).cgColor
+            let path = UIBezierPath()
+            let steps = 120
+            for step in 0...steps {
+                let progress = Double(step) / Double(steps)
+                let x = CGFloat(progress) * size.width
+                let wave = sin(progress * .pi * (1.6 + hueShift) + phase * 3)
+                let drift = cos((phase + hueShift) * 2 * .pi) * 0.15
+                let y = size.height * (0.2 + CGFloat(wave) * 0.12 + CGFloat(drift))
+                if step == 0 {
+                    path.move(to: CGPoint(x: x, y: y))
+                } else {
+                    path.addLine(to: CGPoint(x: x, y: y))
+                }
+            }
+            context.addPath(path.cgPath)
+            context.setLineWidth(CGFloat(4 - index))
+            context.setShadow(offset: .zero, blur: CGFloat(15 - index * 3), color: color)
+            context.setStrokeColor(color)
+            context.strokePath()
+        }
+        context.restoreGState()
+    }
+
+    static func drawPulseNebula(context: CGContext, size: CGSize, palette: [UIColor], phase: Double) {
+        context.saveGState()
+        let center = CGPoint(x: size.width * 0.5, y: size.height * (0.55 + CGFloat(sin(phase * 1.7)) * 0.05))
+        for index in 0..<3 {
+            let pulse = CGFloat(1 + sin(phase * Double(index + 2) * 2 * .pi) * 0.25)
+            let radius = max(size.width, size.height) * (0.25 + CGFloat(index) * 0.2) * pulse
+            let colors = [palette[(index + 1) % palette.count].withAlphaComponent(0.25).cgColor,
+                          UIColor.clear.cgColor]
+            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0, 1]) {
+                context.drawRadialGradient(gradient,
+                                           startCenter: center,
+                                           startRadius: 0,
+                                           endCenter: center,
+                                           endRadius: radius,
+                                           options: .drawsAfterEndLocation)
+            }
+        }
+        context.restoreGState()
+    }
+
+    static func overlayGlyphGrid(context: CGContext, size: CGSize, phase: Double) {
+        context.saveGState()
+        context.setStrokeColor(UIColor.white.withAlphaComponent(0.08).cgColor)
+        context.setLineWidth(0.5)
+        let columns = 5
+        let rows = 3
+        for row in 0..<rows {
+            for column in 0..<columns {
+                let cellWidth = size.width / CGFloat(columns)
+                let cellHeight = size.height / CGFloat(rows)
+                let origin = CGPoint(x: CGFloat(column) * cellWidth, y: CGFloat(row) * cellHeight)
+                let inset = CGFloat(8 + (sin(phase * 4 + Double(row + column)) + 1) * 4)
+                let rect = CGRect(x: origin.x + inset,
+                                  y: origin.y + inset,
+                                  width: cellWidth - inset * 2,
+                                  height: cellHeight - inset * 2)
+                context.stroke(rect)
+            }
+        }
+        context.restoreGState()
+    }
+
+    static func applyLensBloom(context: CGContext, size: CGSize, phase: Double) {
+        context.saveGState()
+        let bloomRect = CGRect(x: 0, y: 0, width: size.width, height: size.height)
+        context.setFillColor(UIColor.white.withAlphaComponent(0.05 + CGFloat(0.02 * sin(phase * 6))).cgColor)
+        context.fill(bloomRect)
+        context.setBlendMode(.screen)
+        let sweepY = size.height * (0.3 + CGFloat(phase) * 0.4)
+        context.setFillColor(UIColor.white.withAlphaComponent(0.12).cgColor)
+        context.fill(CGRect(x: 0, y: sweepY, width: size.width, height: 20))
+        context.restoreGState()
+    }
 }
 
 private enum AudioPlaceholderWriter {
@@ -365,34 +452,164 @@ private enum AudioPlaceholderWriter {
         let channelData = buffer.floatChannelData![0]
         let sampleRate = Float(format.sampleRate)
         let totalDuration = max(Float(duration), 0.1)
-        let padIntervals: [Float] = [1.0, 1.25, 1.5, 1.75]
-        let pulseIntervals: [Float] = [2.0, 1.5, 2.5]
-        let bassIntervals: [Float] = [0.5, 0.75, 1.0]
-        let sceneLength: Float = 4.5
         let base = Float(baseFrequency)
-        let twoPi = Float.pi * 2
+        let sceneLength: Float = 5.5
+        let progression: [[Float]] = [
+            [0, 7, 12, 19],
+            [-3, 4, 9, 14],
+            [2, 9, 14, 19],
+            [0, 5, 10, 17]
+        ]
+        let padDetune: [Float] = [-0.18, 0.07, 0.21]
+        var bassFilter = OnePoleFilter(coefficient: 0.018)
+        var airFilter = OnePoleFilter(coefficient: 0.12)
+        var shimmerFilter = OnePoleFilter(coefficient: 0.05)
+        var textureFilter = OnePoleFilter(coefficient: 0.08)
+        var shimmerDelay = DreamDelay(sampleRate: sampleRate, time: 0.38, feedback: 0.45)
+        var cloudDelay = DreamDelay(sampleRate: sampleRate, time: 0.63, feedback: 0.58)
+        var random = DreamRandom(seed: UInt64(bitPattern: Int64(baseFrequency * 1000)))
+
         for frame in 0..<Int(totalFrames) {
             let t = Float(frame) / sampleRate
-            let sceneIndex = Int(t / sceneLength)
-            let padFreq = base * padIntervals[sceneIndex % padIntervals.count]
-            let pulseFreq = base * pulseIntervals[sceneIndex % pulseIntervals.count]
-            let bassFreq = base * bassIntervals[sceneIndex % bassIntervals.count]
+            let scenePosition = t / sceneLength
+            let sceneIndex = Int(scenePosition)
+            let chord = progression[sceneIndex % progression.count]
+            let progress = scenePosition - floor(scenePosition)
 
-            let pad = sin(twoPi * padFreq * t + sin(t * 0.35) * 0.6) * 0.45
-            let arp = sin(twoPi * pulseFreq * t * (0.7 + 0.3 * sin(t * 0.5))) * 0.25
-            let shimmer = sin(twoPi * (padFreq * 3) * t + sin(t * 1.5)) * 0.12
-            let bass = sin(twoPi * bassFreq * t) * 0.2
-            let texture = (sin(twoPi * t * 0.3) + sin(twoPi * t * 0.57)) * 0.03
+            let macroLFO = sin(t * 0.12)
+            let shimmerLFO = sin(t * 1.7)
+            let wow = 1 + 0.002 * sin(t * 0.4 + sin(t * 0.07))
+            let pad = padDetune.reduce(Float(0)) { sum, detune in
+                let spread = chord.reduce(Float(0)) { chordSum, interval in
+                    chordSum + waveform(.sine,
+                                         frequency: semitone(base: base * wow * (1 + detune * 0.002), semitone: interval),
+                                         time: t + detune * 0.002,
+                                         vibrato: macroLFO * 0.2)
+                }
+                return sum + spread * 0.08
+            }
 
-            let attack = min(1, t / 2)
-            let release = min(1, max(0, (totalDuration - t) / 2.5))
-            let sceneAccent = 0.85 + 0.15 * sin(Float(sceneIndex) + t * 0.4)
-            let envelope = attack * release * sceneAccent
+            let arpIndex = Int(progress * Float(chord.count * 2)) % chord.count
+            let arpGate = smoothGate(progress)
+            let arpFreq = semitone(base: base * 2, semitone: chord[arpIndex] + 12)
+            let arp = waveform(.triangle,
+                               frequency: arpFreq,
+                               time: t * (1.3 + 0.2 * sin(t * 0.25)),
+                               vibrato: shimmerLFO * 0.05) * 0.22 * arpGate
 
-            let signal = (pad + arp + shimmer + bass) * envelope + texture
-            channelData[frame] = max(-0.95, min(0.95, signal * 0.7))
+            let choirFreq = semitone(base: base * 0.5, semitone: chord[0])
+            let choir = waveform(.sine,
+                                 frequency: choirFreq,
+                                 time: t,
+                                 vibrato: sin(t * 0.05) * 0.4) * 0.28
+
+            let bassFreq = semitone(base: base * 0.5, semitone: chord[0] - 12)
+            let rawBass = waveform(.saw,
+                                   frequency: bassFreq * (1 + 0.005 * sin(t * 0.6)),
+                                   time: t,
+                                   vibrato: 0) * 0.35
+            let bass = bassFilter.process(rawBass)
+
+            let shimmerHarm = waveform(.sine,
+                                       frequency: semitone(base: base * 3, semitone: chord[1] + 7),
+                                       time: t,
+                                       vibrato: shimmerLFO * 0.1) * 0.18
+            let shimmer = shimmerFilter.process(shimmerHarm)
+
+            let noise = (random.nextFloat() * 2 - 1) * (0.015 + 0.01 * abs(macroLFO))
+            let air = airFilter.process(noise)
+            let texture = textureFilter.process((random.nextFloat() * 2 - 1) * 0.02 + sin(t * 0.33) * 0.015)
+
+            let pulse = sin(Float.pi * 2 * 0.5 * t) * (0.08 + 0.04 * sin(t * 0.9))
+
+            let attack = min(1, t / 3)
+            let release = min(1, max(0, (totalDuration - t) / 3.5))
+            let sceneAccent = 0.75 + 0.25 * sin(Float(sceneIndex) * 0.7)
+            var signal = (pad + arp + bass + choir + shimmer + air + texture + pulse) * attack * release * sceneAccent
+            let wet = signal
+            signal += shimmerDelay.process(wet * 0.6)
+            signal += cloudDelay.process(wet * 0.4)
+            let hiss = (random.nextFloat() * 2 - 1) * 0.004
+            channelData[frame] = softClip(signal + hiss)
         }
         try file.write(from: buffer)
+    }
+}
+
+private enum WaveShape {
+    case sine
+    case triangle
+    case saw
+}
+
+private func waveform(_ shape: WaveShape, frequency: Float, time: Float, vibrato: Float) -> Float {
+    let twoPi = Float.pi * 2
+    let phase = twoPi * frequency * (time + vibrato * 0.002)
+    switch shape {
+    case .sine:
+        return sin(phase)
+    case .triangle:
+        let cycle = phase / twoPi
+        let frac = cycle - Float(floor(Double(cycle)))
+        return 2 * abs(2 * frac - 1) - 1
+    case .saw:
+        let value = fmod(phase, twoPi) / twoPi
+        return (value * 2) - 1
+    }
+}
+
+private func semitone(base: Float, semitone: Float) -> Float {
+    base * powf(2, semitone / 12)
+}
+
+private func smoothGate(_ progress: Float) -> Float {
+    max(0, sin(progress * Float.pi))
+}
+
+private func softClip(_ value: Float) -> Float {
+    tanhf(value * 0.9)
+}
+
+private struct DreamDelay {
+    private var buffer: [Float]
+    private var index: Int = 0
+    private let feedback: Float
+
+    init(sampleRate: Float, time: Float, feedback: Float) {
+        let length = max(1, Int(sampleRate * time))
+        self.buffer = Array(repeating: 0, count: length)
+        self.feedback = feedback
+    }
+
+    mutating func process(_ input: Float) -> Float {
+        let output = buffer[index]
+        buffer[index] = input + output * feedback
+        index = (index + 1) % buffer.count
+        return output
+    }
+}
+
+private struct OnePoleFilter {
+    var value: Float = 0
+    let coefficient: Float
+
+    mutating func process(_ input: Float) -> Float {
+        value += coefficient * (input - value)
+        return value
+    }
+}
+
+private struct DreamRandom {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed == 0 ? 0x123456789ABCDEF : seed
+    }
+
+    mutating func nextFloat() -> Float {
+        state = state &* 6364136223846793005 &+ 1
+        let result = Float((state >> 33) & 0xFFFFFFFF) / Float(UInt32.max)
+        return result
     }
 }
 
