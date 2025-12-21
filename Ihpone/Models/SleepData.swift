@@ -69,7 +69,15 @@ extension SleepData {
                 timestamp: start.addingTimeInterval(offset),
                 heartRate: base + Double.random(in: -4...4),
                 hrv: hrv + Double.random(in: -5...5),
-                movement: movement
+                movement: movement,
+                spo2: 96 + Double.random(in: -2...1),
+                respiratoryRate: 14 + Double.random(in: -2...2),
+                ecgConfidence: Double.random(in: 0.8...0.98),
+                hypertensionRisk: Double.random(in: 0.05...0.25),
+                wristTemperatureDelta: Double.random(in: -0.4...0.6),
+                sleepScore: Double.random(in: 78...92),
+                noiseExposure: Double.random(in: 28...48),
+                apneaRisk: Double.random(in: 0.04...0.2)
             )
         }
 

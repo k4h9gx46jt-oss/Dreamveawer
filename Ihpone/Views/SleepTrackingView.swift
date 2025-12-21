@@ -25,12 +25,9 @@ struct SleepTrackingView: View {
         VStack(spacing: 24) {
             connectionStatusCard
 
-            HStack(spacing: 20) {
-                metricCard(title: "Heart", value: "\(Int(connectivity.liveHeartRate)) bpm", icon: "heart.fill", color: .pink)
-                metricCard(title: "HRV", value: "\(Int(connectivity.liveHRV)) ms", icon: "waveform.path", color: .blue)
-            }
+            biosignalMetricGrid
 
-            sleepChart
+            sleepingCharts
 
             if isProcessingAI {
                 ProgressView("Interpreting your dream...")
@@ -84,19 +81,25 @@ struct SleepTrackingView: View {
         }
     }
 
-    private func metricCard(title: String, value: String, icon: String, color: Color) -> some View {
-        VStack(alignment: .leading) {
+    private func metricCard(title: String, value: String, detail: String? = nil, icon: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
             Image(systemName: icon)
                 .foregroundStyle(color)
-            Spacer()
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.title3.bold())
+                .monospacedDigit()
+            if let detail {
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
         }
         .padding()
-        .frame(maxWidth: .infinity, minHeight: 120)
+        .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
@@ -176,24 +179,174 @@ private extension SleepTrackingView {
             }
     }
 
-    var sleepChart: some View {
+    var biosignalMetricGrid: some View {
+        let columns = [GridItem(.flexible()), GridItem(.flexible())]
+        return LazyVGrid(columns: columns, spacing: 16) {
+            metricCard(title: "Heart", value: formattedMetric(connectivity.liveHeartRate, suffix: " bpm"), detail: hrAlertText, icon: "heart.fill", color: .pink)
+            metricCard(title: "HRV", value: formattedMetric(connectivity.liveHRV, suffix: " ms"), detail: hrvStatusText, icon: "waveform.path", color: .blue)
+            metricCard(title: "SpO2", value: formattedMetric(connectivity.liveSpO2, suffix: "%"), detail: respiratoryStatusText, icon: "lungs.fill", color: .teal)
+            metricCard(title: "Resp. Rate", value: formattedMetric(connectivity.liveRespiratoryRate, suffix: " brpm"), detail: apneaStatusText, icon: "wind", color: .cyan)
+            metricCard(title: "ECG", value: formattedMetric(connectivity.liveECGConfidence * 100, suffix: "%"), detail: ecgStatusText, icon: "bolt.heart", color: .orange)
+            metricCard(title: "Hypertension", value: formattedMetric(connectivity.liveHypertensionRisk * 100, suffix: "%"), detail: hypertensionStatusText, icon: "cross.case.fill", color: .red)
+            metricCard(title: "Wrist Temp", value: String(format: "%+.1f degC", connectivity.liveTemperatureDelta), detail: temperatureStatusText, icon: "thermometer", color: .purple)
+            metricCard(title: "Sleep Stage", value: connectivity.liveSleepStage, detail: sleepStageDetailText, icon: "moon.zzz", color: .indigo)
+            metricCard(title: "Sleep Score", value: formattedMetric(connectivity.liveSleepScore, suffix: ""), detail: sleepScoreStatusText, icon: "sparkles", color: .mint)
+            metricCard(title: "Noise", value: formattedMetric(connectivity.liveNoiseExposure, suffix: " dBA"), detail: noiseStatusText, icon: "ear", color: .yellow)
+        }
+        .padding(.horizontal)
+    }
+
+    var sleepingCharts: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("@sleepingchart")
                 .font(.headline)
-            Chart {
-                ForEach(connectivity.remWindows) { window in
-                    RectangleMark(xStart: .value("Start", window.start), xEnd: .value("End", window.end), yStart: .value("REM", 40), yEnd: .value("REM", 120))
-                        .foregroundStyle(.purple.opacity(0.2))
-                }
-                ForEach(connectivity.sleepSamples) { sample in
-                    LineMark(x: .value("Time", sample.timestamp), y: .value("Heart", sample.heartRate))
-                        .foregroundStyle(.pink)
-                }
+            TabView {
+                LiveMetricChart(
+                    title: "Circulatory",
+                    subtitle: "Heart & HRV",
+                    samples: connectivity.sleepSamples,
+                    metrics: [
+                        .init(label: "Heart", keyPath: \.heartRate, color: .pink),
+                        .init(label: "HRV", keyPath: \.hrv, color: .blue)
+                    ]
+                )
+                LiveMetricChart(
+                    title: "Respiratory",
+                    subtitle: "SpO2 & Rate",
+                    samples: connectivity.sleepSamples,
+                    metrics: [
+                        .init(label: "SpO2", keyPath: \.spo2, color: .teal),
+                        .init(label: "Resp Rate", keyPath: \.respiratoryRate, color: .green)
+                    ]
+                )
+                LiveMetricChart(
+                    title: "Thermoreg & Noise",
+                    subtitle: "Temp & Sound",
+                    samples: connectivity.sleepSamples,
+                    metrics: [
+                        .init(label: "Temp", keyPath: \.wristTemperatureDelta, color: .purple),
+                        .init(label: "Noise", keyPath: \.noiseExposure, color: .yellow)
+                    ]
+                )
             }
-            .frame(height: 180)
+            .frame(height: 220)
+            .tabViewStyle(.page(indexDisplayMode: .automatic))
         }
         .padding()
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 20))
+    }
+
+    private func formattedMetric(_ value: Double, suffix: String, placeholder: String = "--") -> String {
+        guard value != 0 else { return placeholder }
+        let integer = suffix.contains("%") ? Int(value.rounded()) : Int(value.rounded())
+        return "\(integer)\(suffix)"
+    }
+
+    private var hrAlertText: String {
+        guard connectivity.liveHeartRate > 0 else { return "Waiting for data" }
+        if connectivity.liveHeartRate > 90 { return "Elevated circulation" }
+        if connectivity.liveHeartRate < 50 { return "Calm flow" }
+        return "Steady"
+    }
+
+    private var hrvStatusText: String {
+        guard connectivity.liveHRV > 0 else { return "Awaiting signal" }
+        return connectivity.liveHRV > 40 ? "Recovered" : "Recharge soon"
+    }
+
+    private var respiratoryStatusText: String {
+        guard connectivity.liveSpO2 > 0 else { return "Waiting" }
+        return connectivity.liveSpO2 >= 95 ? "Optimal oxygen" : "Boost breathing"
+    }
+
+    private var apneaStatusText: String {
+        guard connectivity.liveRespiratoryRate > 0 else { return "Waiting" }
+        return connectivity.liveApneaRisk < 0.4 ? "Low risk" : "Monitor closely"
+    }
+
+    private var ecgStatusText: String {
+        guard connectivity.liveECGConfidence > 0 else { return "Waiting" }
+        return connectivity.liveECGConfidence > 0.85 ? "Stable rhythm" : "Hold steady"
+    }
+
+    private var hypertensionStatusText: String {
+        guard connectivity.liveHypertensionRisk > 0 else { return "Baseline" }
+        if connectivity.liveHypertensionRisk > 0.7 { return "High" }
+        if connectivity.liveHypertensionRisk > 0.4 { return "Watch" }
+        return "Controlled"
+    }
+
+    private var temperatureStatusText: String {
+        abs(connectivity.liveTemperatureDelta) < 0.5 ? "Stable" : "Shift detected"
+    }
+
+    private var sleepStageDetailText: String {
+        switch connectivity.liveSleepStage {
+        case "REM": return "Dream intense"
+        case "Deep": return "Restoring"
+        case "Idle": return "Session paused"
+        default: return "Light drift"
+        }
+    }
+
+    private var sleepScoreStatusText: String {
+        guard connectivity.liveSleepScore > 0 else { return "Calibrating" }
+        if connectivity.liveSleepScore >= 85 { return "Excellent" }
+        if connectivity.liveSleepScore >= 70 { return "On track" }
+        return "Needs recovery"
+    }
+
+    private var noiseStatusText: String {
+        guard connectivity.liveNoiseExposure > 0 else { return "Measuring" }
+        return connectivity.liveNoiseExposure < 40 ? "Calm" : "Noisy"
+    }
+}
+
+private struct LiveMetricChart: View {
+    struct MetricCurve {
+        let label: String
+        let keyPath: KeyPath<BiosignalDataPoint, Double>
+        let color: Color
+    }
+
+    let title: String
+    let subtitle: String
+    let samples: [BiosignalDataPoint]
+    let metrics: [MetricCurve]
+
+    private var plotSamples: [BiosignalDataPoint] {
+        Array(samples.suffix(160))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if plotSamples.isEmpty {
+                Text("Waiting for live data")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 160)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            } else {
+                Chart {
+                    ForEach(metrics, id: \.label) { metric in
+                        ForEach(plotSamples) { sample in
+                            LineMark(
+                                x: .value("Time", sample.timestamp),
+                                y: .value(metric.label, sample[keyPath: metric.keyPath])
+                            )
+                            .foregroundStyle(metric.color)
+                            .interpolationMethod(.catmullRom)
+                        }
+                    }
+                }
+                .frame(height: 180)
+            }
+        }
     }
 }

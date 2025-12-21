@@ -27,24 +27,18 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
         }
     }
 
-    func sendSnapshot(heartRate: Double, hrv: Double) {
-        let payload: [String: Any] = [
-            "heartRate": heartRate,
-            "hrv": hrv,
-            "timestamp": Date().timeIntervalSince1970,
-            "connected": true
-        ]
+    func sendSnapshot(sample: WatchSleepSample) {
+        var payload = basePayload(for: sample)
+        payload["timestamp"] = Date().timeIntervalSince1970
+        payload["connected"] = true
         send(message: payload)
     }
 
     func sendLiveSample(sample: WatchSleepSample, remState: REMState) {
-        let payload: [String: Any] = [
-            "event": "sample",
-            "timestamp": sample.timestamp.timeIntervalSince1970,
-            "heartRate": sample.heartRate,
-            "hrv": sample.hrv,
-            "remState": remState.rawValue
-        ]
+        var payload = basePayload(for: sample)
+        payload["event"] = "sample"
+        payload["timestamp"] = sample.timestamp.timeIntervalSince1970
+        payload["remState"] = remState.rawValue
         send(message: payload)
     }
 
@@ -88,6 +82,21 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
             try? session.updateApplicationContext(message)
         }
     }
+
+        private func basePayload(for sample: WatchSleepSample) -> [String: Any] {
+            [
+                "heartRate": sample.heartRate,
+                "hrv": sample.hrv,
+                "spo2": sample.spo2,
+                "respiratoryRate": sample.respiratoryRate,
+                "ecgConfidence": sample.ecgConfidence,
+                "hypertensionRisk": sample.hypertensionRisk,
+                "temperatureDelta": sample.temperatureDelta,
+                "sleepScore": sample.sleepScore,
+                "noiseExposure": sample.noiseExposure,
+                "apneaRisk": sample.apneaRisk
+            ]
+        }
 }
 
 struct WatchStatusSnapshot {
@@ -204,7 +213,15 @@ enum SessionEvent {
                 [
                     "timestamp": sample.timestamp.timeIntervalSince1970,
                     "heartRate": sample.heartRate,
-                    "hrv": sample.hrv
+                    "hrv": sample.hrv,
+                    "spo2": sample.spo2,
+                    "respiratoryRate": sample.respiratoryRate,
+                    "ecgConfidence": sample.ecgConfidence,
+                    "hypertensionRisk": sample.hypertensionRisk,
+                    "temperatureDelta": sample.temperatureDelta,
+                    "sleepScore": sample.sleepScore,
+                    "noiseExposure": sample.noiseExposure,
+                    "apneaRisk": sample.apneaRisk
                 ]
             }
             return [

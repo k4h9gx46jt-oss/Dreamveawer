@@ -12,6 +12,15 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     @Published var isWatchReachable: Bool = false
     @Published var liveHeartRate: Double = 0
     @Published var liveHRV: Double = 0
+    @Published var liveSpO2: Double = 0
+    @Published var liveRespiratoryRate: Double = 0
+    @Published var liveECGConfidence: Double = 0
+    @Published var liveHypertensionRisk: Double = 0
+    @Published var liveTemperatureDelta: Double = 0
+    @Published var liveSleepScore: Double = 0
+    @Published var liveNoiseExposure: Double = 0
+    @Published var liveApneaRisk: Double = 0
+    @Published var liveSleepStage: String = "Light"
     @Published var sleepSamples: [BiosignalDataPoint] = []
     @Published var remWindows: [SleepREMWindow] = []
     @Published var remoteSessionStart: Date?
@@ -184,6 +193,15 @@ private extension PhoneWatchConnectivityManager {
     func resetLiveMetrics() {
         liveHeartRate = 0
         liveHRV = 0
+        liveSpO2 = 0
+        liveRespiratoryRate = 0
+        liveECGConfidence = 0
+        liveHypertensionRisk = 0
+        liveTemperatureDelta = 0
+        liveSleepScore = 0
+        liveNoiseExposure = 0
+        liveApneaRisk = 0
+        liveSleepStage = "Light"
         sleepSamples = []
         remWindows = []
         currentREMStart = nil
@@ -223,6 +241,38 @@ private extension PhoneWatchConnectivityManager {
             liveHRV = hrv
         }
 
+        if let spo2 = message["spo2"] as? Double {
+            liveSpO2 = spo2
+        }
+
+        if let respiratoryRate = message["respiratoryRate"] as? Double {
+            liveRespiratoryRate = respiratoryRate
+        }
+
+        if let ecg = message["ecgConfidence"] as? Double {
+            liveECGConfidence = ecg
+        }
+
+        if let hypertension = message["hypertensionRisk"] as? Double {
+            liveHypertensionRisk = hypertension
+        }
+
+        if let temperature = message["temperatureDelta"] as? Double {
+            liveTemperatureDelta = temperature
+        }
+
+        if let sleepScore = message["sleepScore"] as? Double {
+            liveSleepScore = sleepScore
+        }
+
+        if let noise = message["noiseExposure"] as? Double {
+            liveNoiseExposure = noise
+        }
+
+        if let apnea = message["apneaRisk"] as? Double {
+            liveApneaRisk = apnea
+        }
+
         if message["event"] == nil, message["tracking"] != nil {
             handleStatusSnapshot(message)
         }
@@ -251,6 +301,7 @@ private extension PhoneWatchConnectivityManager {
                 remoteSessionStart = Date(timeIntervalSince1970: startInterval)
                 remoteSessionEndedAt = nil
             }
+            liveSleepStage = "Light"
         case "sleepEnd":
             guard let endInterval = payload["end"] as? Double else { return }
             let endDate = Date(timeIntervalSince1970: endInterval)
@@ -261,9 +312,32 @@ private extension PhoneWatchConnectivityManager {
                     guard let timestamp = dict["timestamp"],
                           let heartRate = dict["heartRate"],
                           let hrv = dict["hrv"] else { return nil }
-                    return BiosignalDataPoint(timestamp: Date(timeIntervalSince1970: timestamp), heartRate: heartRate, hrv: hrv, movement: 0)
+                    return BiosignalDataPoint(
+                        timestamp: Date(timeIntervalSince1970: timestamp),
+                        heartRate: heartRate,
+                        hrv: hrv,
+                        movement: 0,
+                        spo2: dict["spo2"] ?? 0,
+                        respiratoryRate: dict["respiratoryRate"] ?? 0,
+                        ecgConfidence: dict["ecgConfidence"] ?? 0,
+                        hypertensionRisk: dict["hypertensionRisk"] ?? 0,
+                        wristTemperatureDelta: dict["temperatureDelta"] ?? 0,
+                        sleepScore: dict["sleepScore"] ?? 0,
+                        noiseExposure: dict["noiseExposure"] ?? 0,
+                        apneaRisk: dict["apneaRisk"] ?? 0
+                    )
                 }
                 sleepSamples = decodedSamples
+                if let last = decodedSamples.last {
+                    liveSleepScore = last.sleepScore
+                    liveSpO2 = last.spo2
+                    liveRespiratoryRate = last.respiratoryRate
+                    liveECGConfidence = last.ecgConfidence
+                    liveHypertensionRisk = last.hypertensionRisk
+                    liveTemperatureDelta = last.wristTemperatureDelta
+                    liveNoiseExposure = last.noiseExposure
+                    liveApneaRisk = last.apneaRisk
+                }
             }
             let sessionIdentifier = UUID(uuidString: payload["sessionId"] as? String ?? "")
             let startInterval = payload["start"] as? Double
@@ -280,11 +354,32 @@ private extension PhoneWatchConnectivityManager {
             guard let timestamp = payload["timestamp"] as? Double,
                   let heartRate = payload["heartRate"] as? Double,
                   let hrv = payload["hrv"] as? Double else { return }
-            let sample = BiosignalDataPoint(timestamp: Date(timeIntervalSince1970: timestamp), heartRate: heartRate, hrv: hrv, movement: 0)
+            let sample = BiosignalDataPoint(
+                timestamp: Date(timeIntervalSince1970: timestamp),
+                heartRate: heartRate,
+                hrv: hrv,
+                movement: 0,
+                spo2: payload["spo2"] as? Double ?? liveSpO2,
+                respiratoryRate: payload["respiratoryRate"] as? Double ?? liveRespiratoryRate,
+                ecgConfidence: payload["ecgConfidence"] as? Double ?? liveECGConfidence,
+                hypertensionRisk: payload["hypertensionRisk"] as? Double ?? liveHypertensionRisk,
+                wristTemperatureDelta: payload["temperatureDelta"] as? Double ?? liveTemperatureDelta,
+                sleepScore: payload["sleepScore"] as? Double ?? liveSleepScore,
+                noiseExposure: payload["noiseExposure"] as? Double ?? liveNoiseExposure,
+                apneaRisk: payload["apneaRisk"] as? Double ?? liveApneaRisk
+            )
             sleepSamples.append(sample)
             if sleepSamples.count > 720 { sleepSamples.removeFirst() }
             liveHeartRate = heartRate
             liveHRV = hrv
+            liveSpO2 = sample.spo2
+            liveRespiratoryRate = sample.respiratoryRate
+            liveECGConfidence = sample.ecgConfidence
+            liveHypertensionRisk = sample.hypertensionRisk
+            liveTemperatureDelta = sample.wristTemperatureDelta
+            liveSleepScore = sample.sleepScore
+            liveNoiseExposure = sample.noiseExposure
+            liveApneaRisk = sample.apneaRisk
             if let remState = payload["remState"] as? String {
                 updateREM(with: sample.timestamp, state: remState)
             }
@@ -294,6 +389,7 @@ private extension PhoneWatchConnectivityManager {
     }
 
     func updateREM(with timestamp: Date, state: String) {
+        liveSleepStage = stageLabel(for: state)
         if state == REMState.rem.rawValue {
             if currentREMStart == nil {
                 currentREMStart = timestamp
@@ -309,6 +405,15 @@ private extension PhoneWatchConnectivityManager {
         if let start = currentREMStart {
             remWindows.append(SleepREMWindow(start: start, end: end))
             currentREMStart = nil
+        }
+        liveSleepStage = "Idle"
+    }
+
+    private func stageLabel(for state: String) -> String {
+        switch state {
+        case REMState.rem.rawValue: return "REM"
+        case REMState.deep.rawValue: return "Deep"
+        default: return "Light"
         }
     }
 

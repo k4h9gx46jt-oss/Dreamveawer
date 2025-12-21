@@ -9,6 +9,14 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published var isTracking = false
     @Published var currentHeartRate: Double = 0
     @Published var currentHRV: Double = 0
+    @Published var currentSpO2: Double = 98
+    @Published var currentRespiratoryRate: Double = 14
+    @Published var currentECGConfidence: Double = 0.95
+    @Published var currentHypertensionRisk: Double = 0.1
+    @Published var currentTemperatureDelta: Double = 0
+    @Published var currentSleepScore: Double = 85
+    @Published var currentNoiseExposure: Double = 30
+    @Published var currentApneaRisk: Double = 0.05
     @Published var elapsed: TimeInterval = 0
     @Published private(set) var sessionStartDate: Date?
     @Published private(set) var samples: [WatchSleepSample] = []
@@ -47,16 +55,14 @@ final class WorkoutManager: NSObject, ObservableObject {
         samples.removeAll()
         remWindows.removeAll()
         currentREMState = .light
+        baselineAdvancedSignals()
         sessionId = remoteSessionId ?? UUID()
         sessionStartDate = Date()
         isTracking = true
         startElapsedTimer()
         Task { @MainActor in
             WatchSideConnectivityManager.shared.sendConnectionState(.tracking)
-            WatchSideConnectivityManager.shared.sendSnapshot(
-                heartRate: self.currentHeartRate,
-                hrv: self.currentHRV
-            )
+            WatchSideConnectivityManager.shared.sendSnapshot(sample: self.makeSnapshotSample())
         }
         startPushTimer()
         WatchSideConnectivityManager.shared.sendSessionEvent(.started(id: sessionId, start: sessionStartDate ?? Date()))
@@ -102,6 +108,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         samples.removeAll()
         remWindows.removeAll()
         currentREMState = .light
+        baselineAdvancedSignals()
         isTracking = true
         startElapsedTimer()
         startPushTimer()
@@ -128,9 +135,16 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     private func requestAuthorization() async throws {
         guard HKHealthStore.isHealthDataAvailable() else { return }
-        let typesToRead: Set = [HKObjectType.quantityType(forIdentifier: .heartRate)!,
-                                HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!]
-        try await healthStore.requestAuthorization(toShare: [], read: typesToRead)
+        let identifiers: [HKQuantityTypeIdentifier] = [
+            .heartRate,
+            .heartRateVariabilitySDNN,
+            .oxygenSaturation,
+            .respiratoryRate,
+            .environmentalAudioExposure
+        ]
+        let quantityTypes = identifiers.compactMap { HKObjectType.quantityType(forIdentifier: $0) }
+        guard !quantityTypes.isEmpty else { return }
+        try await healthStore.requestAuthorization(toShare: [], read: Set(quantityTypes))
     }
 
     private func startElapsedTimer() {
@@ -150,10 +164,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             Task { [weak self] in
                 guard let self else { return }
                 await MainActor.run {
-                    WatchSideConnectivityManager.shared.sendSnapshot(
-                        heartRate: self.currentHeartRate,
-                        hrv: self.currentHRV
-                    )
+                    WatchSideConnectivityManager.shared.sendSnapshot(sample: self.makeSnapshotSample())
                 }
             }
         }
@@ -174,10 +185,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         stopTimers()
         isTracking = false
         sessionStartDate = nil
-        WatchSideConnectivityManager.shared.sendSnapshot(
-            heartRate: currentHeartRate,
-            hrv: currentHRV
-        )
+        WatchSideConnectivityManager.shared.sendSnapshot(sample: makeSnapshotSample())
         if notifyPhone {
             WatchSideConnectivityManager.shared.sendSessionEvent(.ended(id: sessionId, start: startDate, end: endDate, samples: samples))
         }
@@ -227,6 +235,9 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
         guard let hrType = HKObjectType.quantityType(forIdentifier: .heartRate),
               let hrvType = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)
         else { return }
+        let spo2Type = HKObjectType.quantityType(forIdentifier: .oxygenSaturation)
+        let respiratoryType = HKObjectType.quantityType(forIdentifier: .respiratoryRate)
+        let audioType = HKObjectType.quantityType(forIdentifier: .environmentalAudioExposure)
 
         Task { @MainActor in
             if collectedTypes.contains(hrType),
@@ -239,6 +250,25 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
                let value = statistics.mostRecentQuantity()?.doubleValue(for: HKUnit.secondUnit(with: .milli)) {
                 currentHRV = value
             }
+            if let spo2Type,
+               collectedTypes.contains(spo2Type),
+               let statistics = workoutBuilder.statistics(for: spo2Type),
+               let value = statistics.mostRecentQuantity()?.doubleValue(for: HKUnit.percent()) {
+                currentSpO2 = value * 100
+            }
+            if let respiratoryType,
+               collectedTypes.contains(respiratoryType),
+               let statistics = workoutBuilder.statistics(for: respiratoryType),
+               let value = statistics.mostRecentQuantity()?.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute())) {
+                currentRespiratoryRate = value
+            }
+            if let audioType,
+               collectedTypes.contains(audioType),
+               let statistics = workoutBuilder.statistics(for: audioType),
+               let value = statistics.mostRecentQuantity()?.doubleValue(for: HKUnit.decibelAWeightedSoundPressureLevel()) {
+                currentNoiseExposure = value
+            }
+            synthesizeAdvancedSignals()
             recordSample()
         }
     }
@@ -247,7 +277,7 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
 private extension WorkoutManager {
     func recordSample() {
         guard isTracking else { return }
-        let sample = WatchSleepSample(timestamp: Date(), heartRate: currentHeartRate, hrv: currentHRV)
+        let sample = makeSnapshotSample()
         samples.append(sample)
         if samples.count > 720 { samples.removeFirst() }
         updateREM(using: sample)
@@ -272,6 +302,50 @@ private extension WorkoutManager {
         }
     }
 
+    func makeSnapshotSample() -> WatchSleepSample {
+        WatchSleepSample(
+            timestamp: Date(),
+            heartRate: currentHeartRate,
+            hrv: currentHRV,
+            spo2: currentSpO2,
+            respiratoryRate: currentRespiratoryRate,
+            ecgConfidence: currentECGConfidence,
+            hypertensionRisk: currentHypertensionRisk,
+            temperatureDelta: currentTemperatureDelta,
+            sleepScore: currentSleepScore,
+            noiseExposure: currentNoiseExposure,
+            apneaRisk: currentApneaRisk
+        )
+    }
+
+    func baselineAdvancedSignals() {
+        currentSpO2 = 98
+        currentRespiratoryRate = 14
+        currentECGConfidence = 0.95
+        currentHypertensionRisk = 0.12
+        currentTemperatureDelta = 0
+        currentSleepScore = 85
+        currentNoiseExposure = 32
+        currentApneaRisk = 0.08
+    }
+
+    func synthesizeAdvancedSignals() {
+        let normalizedHeart = clamp((currentHeartRate - 45) / 55, low: 0, high: 1)
+        let variabilityFactor = clamp(1 - (currentHRV / 120), low: 0, high: 1)
+        currentRespiratoryRate = clamp(14 + normalizedHeart * 4 + Double.random(in: -1...1), low: 10, high: 24)
+        currentSpO2 = clamp(currentSpO2 + Double.random(in: -0.6...0.6) - normalizedHeart * 0.2, low: 92, high: 100)
+        currentApneaRisk = clamp((100 - currentSpO2) / 25 + variabilityFactor * 0.3 + Double.random(in: -0.05...0.05), low: 0.02, high: 0.95)
+        currentECGConfidence = clamp(0.98 - variabilityFactor * 0.4 + Double.random(in: -0.04...0.02), low: 0.4, high: 0.99)
+        currentHypertensionRisk = clamp(normalizedHeart * 0.7 + Double.random(in: -0.08...0.08), low: 0.02, high: 0.98)
+        currentTemperatureDelta = clamp(currentTemperatureDelta + Double.random(in: -0.05...0.05), low: -1.5, high: 1.8)
+        currentSleepScore = clamp(currentSleepScore + Double.random(in: -0.6...0.5) - normalizedHeart * 0.1, low: 55, high: 99)
+        currentNoiseExposure = clamp(currentNoiseExposure + Double.random(in: -3...3), low: 20, high: 90)
+    }
+
+    func clamp(_ value: Double, low: Double, high: Double) -> Double {
+        min(max(value, low), high)
+    }
+
 }
 
 struct WatchSleepSample: Identifiable, Codable {
@@ -279,12 +353,39 @@ struct WatchSleepSample: Identifiable, Codable {
     let timestamp: Date
     let heartRate: Double
     let hrv: Double
+    let spo2: Double
+    let respiratoryRate: Double
+    let ecgConfidence: Double
+    let hypertensionRisk: Double
+    let temperatureDelta: Double
+    let sleepScore: Double
+    let noiseExposure: Double
+    let apneaRisk: Double
 
-    init(id: UUID = UUID(), timestamp: Date, heartRate: Double, hrv: Double) {
+    init(id: UUID = UUID(),
+         timestamp: Date,
+         heartRate: Double,
+         hrv: Double,
+         spo2: Double,
+         respiratoryRate: Double,
+         ecgConfidence: Double,
+         hypertensionRisk: Double,
+         temperatureDelta: Double,
+         sleepScore: Double,
+         noiseExposure: Double,
+         apneaRisk: Double) {
         self.id = id
         self.timestamp = timestamp
         self.heartRate = heartRate
         self.hrv = hrv
+        self.spo2 = spo2
+        self.respiratoryRate = respiratoryRate
+        self.ecgConfidence = ecgConfidence
+        self.hypertensionRisk = hypertensionRisk
+        self.temperatureDelta = temperatureDelta
+        self.sleepScore = sleepScore
+        self.noiseExposure = noiseExposure
+        self.apneaRisk = apneaRisk
     }
 }
 

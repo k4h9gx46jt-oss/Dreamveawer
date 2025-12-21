@@ -75,13 +75,28 @@ struct WatchContentView: View {
                 .foregroundStyle(.white.opacity(0.8))
                 .multilineTextAlignment(.center)
 
-            metricsRow
+            biosignalSuites
+
+            MetricSparkline(
+                title: "Heart rhythm",
+                caption: "Circulatory focus",
+                samples: workoutManager.samples,
+                keyPath: \.heartRate
+            )
 
             MetricSparkline(
                 title: "HRV trend",
                 caption: "@sleepingchart",
                 samples: workoutManager.samples,
                 keyPath: \.hrv
+            )
+
+            MetricSparkline(
+                title: "SpO2 timeline",
+                caption: "Respiratory stream",
+                samples: workoutManager.samples,
+                keyPath: \.spo2,
+                chartHeight: 60
             )
 
             if workoutManager.isTracking {
@@ -108,7 +123,7 @@ struct WatchContentView: View {
                 remPhaseRow
             }
 
-            metricsRow
+            biosignalSuites
 
             actionButton
         }
@@ -154,26 +169,158 @@ struct WatchContentView: View {
             .foregroundStyle(.white)
     }
 
-    private var metricsRow: some View {
-        HStack(spacing: 10) {
-            metricCard(title: "Heart", value: "\(Int(workoutManager.currentHeartRate)) bpm", icon: "heart.fill", tint: .pink)
-            metricCard(title: "HRV", value: "\(Int(workoutManager.currentHRV)) ms", icon: "waveform.path.ecg", tint: .cyan)
+    private var biosignalSuites: some View {
+        VStack(spacing: 10) {
+            biosignalSection(title: "Circulatory", metrics: circulatoryMetrics)
+            biosignalSection(title: "Respiratory", metrics: respiratoryMetrics)
+            biosignalSection(title: "Thermoreg & Sleep", metrics: thermoregMetrics)
+            biosignalSection(title: "Wellness", metrics: wellnessMetrics)
         }
     }
 
-    private func metricCard(title: String, value: String, icon: String, tint: Color) -> some View {
+    private func biosignalSection(title: String, metrics: [SuiteMetric]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(value, systemImage: icon)
-                .font(.headline)
-                .foregroundStyle(tint)
             Text(title)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.7))
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(metrics) { metric in
+                    biosignalTile(metric)
+                }
+            }
         }
-        .padding()
-        .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
+    }
+
+    private func biosignalTile(_ metric: SuiteMetric) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(metric.value, systemImage: metric.icon)
+                .font(.caption)
+                .foregroundStyle(metric.tint)
+            Text(metric.title)
+                .font(.caption2)
+                .foregroundStyle(.white)
+            Text(metric.detail)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(2)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var circulatoryMetrics: [SuiteMetric] {
+        [
+            SuiteMetric(title: "Heart Rate", value: "\(Int(workoutManager.currentHeartRate)) bpm", detail: hrAlertDetail, icon: "heart.fill", tint: .pink),
+            SuiteMetric(title: "HR Alerts", value: hrAlertLabel, detail: "Flow \(hrAlertDetail)", icon: "bell.badge.fill", tint: .orange),
+            SuiteMetric(title: "ECG", value: "\(Int(workoutManager.currentECGConfidence * 100))%", detail: ecgStatusText, icon: "bolt.heart", tint: .yellow),
+            SuiteMetric(title: "Hypertension", value: riskPercent(workoutManager.currentHypertensionRisk), detail: hypertensionStatusText, icon: "cross.case.fill", tint: .red)
+        ]
+    }
+
+    private var respiratoryMetrics: [SuiteMetric] {
+        [
+            SuiteMetric(title: "SpO2", value: "\(Int(workoutManager.currentSpO2))%", detail: respiratoryStatusText, icon: "lungs.fill", tint: .teal),
+            SuiteMetric(title: "Resp. Rate", value: "\(Int(workoutManager.currentRespiratoryRate)) brpm", detail: respiratoryTrendText, icon: "wind", tint: .cyan),
+            SuiteMetric(title: "Sleep Apnea", value: riskLabel(for: workoutManager.currentApneaRisk), detail: apneaStatusText, icon: "zzz", tint: .blue)
+        ]
+    }
+
+    private var thermoregMetrics: [SuiteMetric] {
+        [
+            SuiteMetric(title: "Wrist Temp", value: String(format: "%+.1f degC", workoutManager.currentTemperatureDelta), detail: temperatureStatusText, icon: "thermometer", tint: .purple),
+            SuiteMetric(title: "Sleep Stage", value: workoutManager.currentREMState.label, detail: workoutManager.currentREMState.detail, icon: "moonphase.waxing.crescent", tint: .indigo),
+            SuiteMetric(title: "Sleep Score", value: "\(Int(workoutManager.currentSleepScore))", detail: sleepScoreStatusText, icon: "sparkles", tint: .mint)
+        ]
+    }
+
+    private var wellnessMetrics: [SuiteMetric] {
+        [
+            SuiteMetric(title: "HRV", value: "\(Int(workoutManager.currentHRV)) ms", detail: hrvStatusText, icon: "waveform.path.ecg", tint: .cyan),
+            SuiteMetric(title: "Resp. Quality", value: respiratoryQualityValue, detail: respiratoryQualityDetail, icon: "lungs", tint: .green),
+            SuiteMetric(title: "Noise", value: "\(Int(workoutManager.currentNoiseExposure)) dBA", detail: noiseStatusText, icon: "ear", tint: .yellow)
+        ]
+    }
+
+    private func riskPercent(_ value: Double) -> String {
+        "\(Int(value * 100))%"
+    }
+
+    private func riskLabel(for value: Double) -> String {
+        value < 0.33 ? "Low" : (value < 0.66 ? "Medium" : "High")
+    }
+
+    private var hrAlertLabel: String {
+        if workoutManager.currentHeartRate > 95 { return "Elevated" }
+        if workoutManager.currentHeartRate < 50 { return "Calm" }
+        return "Steady"
+    }
+
+    private var hrAlertDetail: String {
+        "\(Int(workoutManager.currentHeartRate)) bpm"
+    }
+
+    private var ecgStatusText: String {
+        workoutManager.currentECGConfidence > 0.85 ? "Stable rhythm" : "Analyze signal"
+    }
+
+    private var hypertensionStatusText: String {
+        let risk = workoutManager.currentHypertensionRisk
+        if risk > 0.7 { return "High pressure" }
+        if risk > 0.4 { return "Watch closely" }
+        return "Good control"
+    }
+
+    private var respiratoryStatusText: String {
+        workoutManager.currentSpO2 >= 95 ? "Optimal oxygen" : "Boost breathing"
+    }
+
+    private var respiratoryTrendText: String {
+        if workoutManager.currentRespiratoryRate > 18 { return "Elevated cadence" }
+        if workoutManager.currentRespiratoryRate < 12 { return "Deep breaths" }
+        return "Balanced flow"
+    }
+
+    private var apneaStatusText: String {
+        let label = riskLabel(for: workoutManager.currentApneaRisk)
+        return "Risk \(label.lowercased())"
+    }
+
+    private var temperatureStatusText: String {
+        abs(workoutManager.currentTemperatureDelta) < 0.5 ? "Stable" : "Shift detected"
+    }
+
+    private var sleepScoreStatusText: String {
+        if workoutManager.currentSleepScore > 90 { return "Excellent" }
+        if workoutManager.currentSleepScore > 75 { return "On track" }
+        return "Recover"
+    }
+
+    private var hrvStatusText: String {
+        workoutManager.currentHRV > 40 ? "Resilient" : "Recharge"
+    }
+
+    private var respiratoryQualityValue: String {
+        let quality = max(0, min(100, Int((1 - workoutManager.currentApneaRisk) * 100)))
+        return "\(quality)%"
+    }
+
+    private var respiratoryQualityDetail: String {
+        workoutManager.currentApneaRisk < 0.4 ? "Smooth flow" : "Therapy ready"
+    }
+
+    private var noiseStatusText: String {
+        workoutManager.currentNoiseExposure < 40 ? "Calm room" : "Noisy"
+    }
+
+    private struct SuiteMetric: Identifiable {
+        let id = UUID()
+        let title: String
+        let value: String
+        let detail: String
+        let icon: String
+        let tint: Color
     }
 
     private var remPhaseRow: some View {
