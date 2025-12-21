@@ -146,7 +146,7 @@ private extension DreamDetailView {
                         .init(label: "Heart", keyPath: \.heartRate, color: .pink),
                         .init(label: "HRV", keyPath: \.hrv, color: .blue)
                     ],
-                    chartHeight: 180
+                    chartHeight: 220
                 )
                 .tag(0)
 
@@ -158,7 +158,7 @@ private extension DreamDetailView {
                         .init(label: "SpO₂", keyPath: \.spo2, color: .teal),
                         .init(label: "Resp Rate", keyPath: \.respiratoryRate, color: .green)
                     ],
-                    chartHeight: 180
+                    chartHeight: 220
                 )
                 .tag(1)
 
@@ -172,7 +172,7 @@ private extension DreamDetailView {
                             sample.apneaRisk * 40
                         }
                     ],
-                    chartHeight: 180
+                    chartHeight: 220
                 )
                 .tag(2)
 
@@ -184,11 +184,11 @@ private extension DreamDetailView {
                         .init(label: "Temp", keyPath: \.wristTemperatureDelta, color: .purple),
                         .init(label: "Noise", keyPath: \.noiseExposure, color: .yellow)
                     ],
-                    chartHeight: 180
+                    chartHeight: 220
                 )
                 .tag(3)
             }
-            .frame(height: 220)
+            .frame(height: 300)
             .tabViewStyle(.page(indexDisplayMode: .never))
 
             HStack(spacing: 8) {
