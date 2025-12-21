@@ -33,6 +33,9 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     private var dreamStore: SleepDataStore?
     private var pendingRemoteSessions: [RemoteSleepSessionResult] = []
     private var lastStatusProbeDate: Date?
+    private var wantsLiveMirroring = false
+    private var mockSampleTimer: Timer?
+    private var mockSampleGenerator = MockSampleGenerator()
 
     private override init() {
         super.init()
@@ -46,11 +49,15 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     }
 
     func startMirroringLiveData() {
+        wantsLiveMirroring = true
         resetLiveMetrics()
         requestConnectionPing()
+        startMockStreamIfNeeded()
     }
 
     func stopMirroringLiveData() {
+        wantsLiveMirroring = false
+        stopMockStream()
         resetLiveMetrics()
     }
 
@@ -167,7 +174,10 @@ private extension PhoneWatchConnectivityManager {
         let reachable = session.isReachable || (session.activationState == .activated && paired)
         isWatchReachable = reachable || watchReportedConnected
         if isWatchReachable {
+            stopMockStream()
             requestWatchStatusSnapshot()
+        } else if wantsLiveMirroring {
+            startMockStreamIfNeeded()
         }
     }
 
@@ -220,6 +230,9 @@ private extension PhoneWatchConnectivityManager {
     }
 
     func process(message: [String: Any], from session: WCSession) {
+        if message["event"] != nil || message["heartRate"] != nil {
+            stopMockStream()
+        }
         if let event = message["event"] as? String {
             handleEvent(event, payload: message)
             refreshReachability(using: session)
@@ -291,6 +304,7 @@ private extension PhoneWatchConnectivityManager {
       }
 
     func handleEvent(_ event: String, payload: [String: Any]) {
+        stopMockStream()
         switch event {
         case "sleepStart":
             resetLiveMetrics()
@@ -350,6 +364,7 @@ private extension PhoneWatchConnectivityManager {
                                                                 startedAt: startDate,
                                                                 endedAt: endDate,
                                                                 samples: decodedSamples))
+            wantsLiveMirroring = false
         case "sample":
             guard let timestamp = payload["timestamp"] as? Double,
                   let heartRate = payload["heartRate"] as? Double,
@@ -448,6 +463,41 @@ private extension PhoneWatchConnectivityManager {
             refreshReachability(using: session)
         }
     }
+
+    func startMockStreamIfNeeded() {
+        guard wantsLiveMirroring, mockSampleTimer == nil else { return }
+        mockSampleGenerator.reset()
+        mockSampleTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            self?.emitMockSample()
+        }
+    }
+
+    func stopMockStream() {
+        mockSampleTimer?.invalidate()
+        mockSampleTimer = nil
+    }
+
+    func emitMockSample() {
+        guard wantsLiveMirroring else {
+            stopMockStream()
+            return
+        }
+        let result = mockSampleGenerator.nextSample()
+        let sample = result.sample
+        sleepSamples.append(sample)
+        if sleepSamples.count > 720 { sleepSamples.removeFirst() }
+        liveHeartRate = sample.heartRate
+        liveHRV = sample.hrv
+        liveSpO2 = sample.spo2
+        liveRespiratoryRate = sample.respiratoryRate
+        liveECGConfidence = sample.ecgConfidence
+        liveHypertensionRisk = sample.hypertensionRisk
+        liveTemperatureDelta = sample.wristTemperatureDelta
+        liveSleepScore = sample.sleepScore
+        liveNoiseExposure = sample.noiseExposure
+        liveApneaRisk = sample.apneaRisk
+        updateREM(with: sample.timestamp, state: result.stage.rawValue)
+    }
 }
 
 private enum WatchSideStatus: String {
@@ -460,4 +510,66 @@ private enum REMState: String {
     case light
     case deep
     case rem
+}
+
+private struct MockSampleGenerator {
+    private var referenceDate = Date()
+    private var temperatureDelta: Double = 0
+    private var sleepScore: Double = 85
+    private var noiseExposure: Double = 32
+    private var lastREMState: REMState = .light
+
+    mutating func reset() {
+        referenceDate = Date()
+        temperatureDelta = 0
+        sleepScore = 85
+        noiseExposure = 32
+        lastREMState = .light
+    }
+
+    mutating func nextSample() -> (sample: BiosignalDataPoint, stage: REMState) {
+        let now = Date()
+        let elapsed = now.timeIntervalSince(referenceDate)
+        let heart = clamp(62 + sin(elapsed / 34) * 6 + Double.random(in: -4...4), low: 48, high: 96)
+        let hrv = clamp(55 - sin(elapsed / 52) * 5 + Double.random(in: -4...4), low: 28, high: 92)
+        let normalizedHeart = clamp((heart - 46) / 55, low: 0, high: 1)
+        let variabilityFactor = clamp(1 - (hrv / 120), low: 0, high: 1)
+        let respiratory = clamp(13 + normalizedHeart * 4 + Double.random(in: -1...1), low: 10, high: 24)
+        let spo2 = clamp(98 - normalizedHeart * 1.4 + Double.random(in: -0.6...0.4), low: 93, high: 100)
+        let apnea = clamp((100 - spo2) / 25 + variabilityFactor * 0.3 + Double.random(in: -0.05...0.05), low: 0.02, high: 0.92)
+        let ecg = clamp(0.98 - variabilityFactor * 0.4 + Double.random(in: -0.04...0.02), low: 0.5, high: 0.99)
+        let hypertension = clamp(normalizedHeart * 0.7 + Double.random(in: -0.08...0.08), low: 0.02, high: 0.95)
+        temperatureDelta = clamp(temperatureDelta + Double.random(in: -0.05...0.05), low: -1.5, high: 1.8)
+        sleepScore = clamp(sleepScore + Double.random(in: -0.5...0.5) - normalizedHeart * 0.1, low: 60, high: 98)
+        noiseExposure = clamp(noiseExposure + Double.random(in: -3...3), low: 25, high: 80)
+        let movement = clamp(Double.random(in: 0...0.2) + (lastREMState == .rem ? 0.1 : 0), low: 0, high: 0.6)
+        let stage: REMState
+        if heart >= 52 && heart <= 74 && hrv > 35 {
+            stage = .rem
+        } else if heart < 50 {
+            stage = .deep
+        } else {
+            stage = .light
+        }
+        lastREMState = stage
+        let sample = BiosignalDataPoint(
+            timestamp: now,
+            heartRate: heart,
+            hrv: hrv,
+            movement: movement,
+            spo2: spo2,
+            respiratoryRate: respiratory,
+            ecgConfidence: ecg,
+            hypertensionRisk: hypertension,
+            wristTemperatureDelta: temperatureDelta,
+            sleepScore: sleepScore,
+            noiseExposure: noiseExposure,
+            apneaRisk: apnea
+        )
+        return (sample, stage)
+    }
+
+    private func clamp(_ value: Double, low: Double, high: Double) -> Double {
+        min(max(value, low), high)
+    }
 }
