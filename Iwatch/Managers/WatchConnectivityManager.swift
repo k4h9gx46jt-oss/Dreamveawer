@@ -18,7 +18,10 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
     private let maxCommandTokensStored = 20
     private var bufferedSamplePayloads: [[String: Any]] = []
     private var pendingUserInfoTransfers: [WCSessionUserInfoTransfer] = []
-    private let maxOutstandingUserInfoTransfers = 40
+    private var offlineSampleBuffer: [[String: Any]] = []
+    private var lastOfflineFlushDate: Date = .distantPast
+    private let offlineBatchSize = 25
+    private let offlineFlushInterval: TimeInterval = 15
 
     private override init() {
         super.init()
@@ -99,17 +102,73 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
         }
     }
 
+    func forceFlushOfflineSamples() {
+        flushOfflineBufferIfNeeded(force: true)
+    }
+
     private func enqueueBackgroundTransfer(for payload: [String: Any]) {
+        if payload["event"] as? String == "sample" {
+            bufferOfflineSamplePayload(payload)
+            return
+        }
+        sendUserInfoPayload(payload)
+    }
+
+    private func bufferOfflineSamplePayload(_ payload: [String: Any]) {
+        offlineSampleBuffer.append(payload)
+        trimOfflineBufferIfNeeded()
+        flushOfflineBufferIfNeeded()
+    }
+
+    private func trimOfflineBufferIfNeeded() {
+        let overflow = offlineSampleBuffer.count - offlineBatchSize * 20
+        if overflow > 0 {
+            offlineSampleBuffer.removeFirst(overflow)
+        }
+    }
+
+    private func flushOfflineBufferIfNeeded(force: Bool = false) {
+        guard !offlineSampleBuffer.isEmpty else { return }
+        let elapsed = Date().timeIntervalSince(lastOfflineFlushDate)
+        let shouldFlush = force || offlineSampleBuffer.count >= offlineBatchSize || elapsed >= offlineFlushInterval
+        guard shouldFlush else { return }
+        let samples = offlineSampleBuffer
+        offlineSampleBuffer = []
+        let payload: [String: Any] = [
+            "event": "sampleBatch",
+            "samples": samples
+        ]
+        let delivered = deliverBatchPayload(payload)
+        if !delivered {
+            offlineSampleBuffer.insert(contentsOf: samples, at: 0)
+            return
+        }
+        lastOfflineFlushDate = Date()
+    }
+
+    @discardableResult
+    private func deliverBatchPayload(_ payload: [String: Any]) -> Bool {
+        guard WCSession.isSupported() else { return false }
+        let session = WCSession.default
+        var delivered = false
+        if session.isReachable {
+            session.sendMessage(payload, replyHandler: nil)
+            delivered = true
+        }
+        if session.activationState == .activated {
+            let transfer = session.transferUserInfo(payload)
+            pendingUserInfoTransfers.append(transfer)
+            delivered = true
+        }
+        return delivered
+    }
+
+    private func sendUserInfoPayload(_ payload: [String: Any]) {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         guard session.activationState == .activated else { return }
         let transfer = session.transferUserInfo(payload)
         pendingUserInfoTransfers.append(transfer)
-        if pendingUserInfoTransfers.count > maxOutstandingUserInfoTransfers,
-           let oldest = pendingUserInfoTransfers.first {
-            oldest.cancel()
-            pendingUserInfoTransfers.removeFirst()
-        }
     }
 
         private func basePayload(for sample: WatchSleepSample) -> [String: Any] {
@@ -161,7 +220,13 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
             if let error,
                let retryPayload = userInfoTransfer.userInfo as? [String: Any] {
                 print("UserInfo transfer failed: \(error.localizedDescription)")
-                bufferedSamplePayloads.append(retryPayload)
+                if retryPayload["event"] as? String == "sampleBatch",
+                   let samples = retryPayload["samples"] as? [[String: Any]] {
+                    offlineSampleBuffer.insert(contentsOf: samples, at: 0)
+                    trimOfflineBufferIfNeeded()
+                } else {
+                    bufferedSamplePayloads.append(retryPayload)
+                }
             }
         }
     }
@@ -171,6 +236,7 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
             if session.isReachable {
                 self.flushBufferedSamplesIfNeeded()
             }
+            self.flushOfflineBufferIfNeeded(force: session.isReachable)
         }
     }
 

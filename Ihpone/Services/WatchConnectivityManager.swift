@@ -375,36 +375,18 @@ private extension PhoneWatchConnectivityManager {
                                                                 samples: decodedSamples))
             wantsLiveMirroring = false
         case "sample":
-            guard let timestamp = payload["timestamp"] as? Double,
-                  let heartRate = payload["heartRate"] as? Double,
-                  let hrv = payload["hrv"] as? Double else { return }
-            let sample = BiosignalDataPoint(
-                timestamp: Date(timeIntervalSince1970: timestamp),
-                heartRate: heartRate,
-                hrv: hrv,
-                movement: 0,
-                spo2: payload["spo2"] as? Double ?? liveSpO2,
-                respiratoryRate: payload["respiratoryRate"] as? Double ?? liveRespiratoryRate,
-                ecgConfidence: payload["ecgConfidence"] as? Double ?? liveECGConfidence,
-                hypertensionRisk: payload["hypertensionRisk"] as? Double ?? liveHypertensionRisk,
-                wristTemperatureDelta: payload["temperatureDelta"] as? Double ?? liveTemperatureDelta,
-                sleepScore: payload["sleepScore"] as? Double ?? liveSleepScore,
-                noiseExposure: payload["noiseExposure"] as? Double ?? liveNoiseExposure,
-                apneaRisk: payload["apneaRisk"] as? Double ?? liveApneaRisk
-            )
-            integrateLiveSample(sample)
-            liveHeartRate = heartRate
-            liveHRV = hrv
-            liveSpO2 = sample.spo2
-            liveRespiratoryRate = sample.respiratoryRate
-            liveECGConfidence = sample.ecgConfidence
-            liveHypertensionRisk = sample.hypertensionRisk
-            liveTemperatureDelta = sample.wristTemperatureDelta
-            liveSleepScore = sample.sleepScore
-            liveNoiseExposure = sample.noiseExposure
-            liveApneaRisk = sample.apneaRisk
-            if let remState = payload["remState"] as? String {
-                updateREM(with: sample.timestamp, state: remState)
+            guard let sample = decodeSample(from: payload) else { return }
+            applyLiveSample(sample, remState: payload["remState"] as? String)
+        case "sampleBatch":
+            guard let entries = payload["samples"] as? [[String: Any]] else { return }
+            let ordered = entries.sorted { (lhs, rhs) in
+                let leftTs = lhs["timestamp"] as? Double ?? 0
+                let rightTs = rhs["timestamp"] as? Double ?? 0
+                return leftTs < rightTs
+            }
+            for entry in ordered {
+                guard let sample = decodeSample(from: entry) else { continue }
+                applyLiveSample(sample, remState: entry["remState"] as? String)
             }
         default:
             break
@@ -504,6 +486,43 @@ private extension PhoneWatchConnectivityManager {
         liveNoiseExposure = sample.noiseExposure
         liveApneaRisk = sample.apneaRisk
         updateREM(with: sample.timestamp, state: result.stage.rawValue)
+    }
+
+    func decodeSample(from payload: [String: Any]) -> BiosignalDataPoint? {
+        guard let timestamp = payload["timestamp"] as? Double,
+              let heartRate = payload["heartRate"] as? Double,
+              let hrv = payload["hrv"] as? Double else { return nil }
+        return BiosignalDataPoint(
+            timestamp: Date(timeIntervalSince1970: timestamp),
+            heartRate: heartRate,
+            hrv: hrv,
+            movement: 0,
+            spo2: payload["spo2"] as? Double ?? liveSpO2,
+            respiratoryRate: payload["respiratoryRate"] as? Double ?? liveRespiratoryRate,
+            ecgConfidence: payload["ecgConfidence"] as? Double ?? liveECGConfidence,
+            hypertensionRisk: payload["hypertensionRisk"] as? Double ?? liveHypertensionRisk,
+            wristTemperatureDelta: payload["temperatureDelta"] as? Double ?? liveTemperatureDelta,
+            sleepScore: payload["sleepScore"] as? Double ?? liveSleepScore,
+            noiseExposure: payload["noiseExposure"] as? Double ?? liveNoiseExposure,
+            apneaRisk: payload["apneaRisk"] as? Double ?? liveApneaRisk
+        )
+    }
+
+    func applyLiveSample(_ sample: BiosignalDataPoint, remState: String?) {
+        integrateLiveSample(sample)
+        liveHeartRate = sample.heartRate
+        liveHRV = sample.hrv
+        liveSpO2 = sample.spo2
+        liveRespiratoryRate = sample.respiratoryRate
+        liveECGConfidence = sample.ecgConfidence
+        liveHypertensionRisk = sample.hypertensionRisk
+        liveTemperatureDelta = sample.wristTemperatureDelta
+        liveSleepScore = sample.sleepScore
+        liveNoiseExposure = sample.noiseExposure
+        liveApneaRisk = sample.apneaRisk
+        if let remState {
+            updateREM(with: sample.timestamp, state: remState)
+        }
     }
 
     func integrateLiveSample(_ sample: BiosignalDataPoint) {

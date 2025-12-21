@@ -236,6 +236,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         if notifyPhone {
             WatchSideConnectivityManager.shared.sendSessionEvent(.ended(id: sessionId, start: startDate, end: endDate, samples: samples))
         }
+        WatchSideConnectivityManager.shared.forceFlushOfflineSamples()
         Task { @MainActor in
             WatchSideConnectivityManager.shared.sendConnectionState(.ready)
         }
