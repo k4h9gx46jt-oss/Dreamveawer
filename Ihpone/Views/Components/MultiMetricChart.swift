@@ -3,7 +3,7 @@ import Charts
 
 /// Shared chart view that renders multiple biosignal metrics with consistent styling.
 struct MultiMetricChart: View {
-    struct MetricCurve: Hashable {
+    struct MetricCurve {
         let label: String
         let color: Color
         private let valueProvider: (BiosignalDataPoint) -> Double
