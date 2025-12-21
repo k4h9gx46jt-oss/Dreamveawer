@@ -1,6 +1,13 @@
 import Foundation
 import Combine
 
+struct RemoteSleepSessionResult {
+    let sessionId: UUID?
+    let startedAt: Date
+    let endedAt: Date
+    let samples: [BiosignalDataPoint]
+}
+
 @MainActor
 final class SleepDataStore: ObservableObject {
     @Published private(set) var dreams: [SleepData] = [SleepData.mock(), SleepData.mock(durationHours: 2.3)]
@@ -32,6 +39,26 @@ final class SleepDataStore: ObservableObject {
 
         dreams.insert(dream, at: 0)
         activeSession = nil
+    }
+
+    func ingestRemoteSession(_ result: RemoteSleepSessionResult) async {
+        var session = SleepSession(startedAt: result.startedAt, biosignals: result.samples)
+        session.finish(on: result.endedAt)
+        session.recalculateAverages()
+        await persistSession(session)
+    }
+
+    func persistSession(_ session: SleepSession) async {
+        let aiResult = await Task.detached(priority: .userInitiated) {
+            try? await AIDreamService.shared.interpret(session: session)
+        }.value
+
+        guard let aiResult else {
+            print("AI interpretation failed")
+            return
+        }
+
+        addDream(from: session, aiResult: aiResult)
     }
 }
 

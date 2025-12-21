@@ -130,18 +130,14 @@ struct SleepTrackingView: View {
             connectivity.stopMirroringLiveData()
             connectivity.stopSleepSession(id: session.id)
         }
-        session.biosignals = samples
-        session.recalculateAverages()
-        session.finish(on: endDate)
+        var completedSession = session
+        completedSession.biosignals = samples
+        completedSession.recalculateAverages()
+        completedSession.finish(on: endDate)
         Task {
-            isProcessingAI = true
-            let result = try? await AIDreamService.shared.interpret(session: session)
-            await MainActor.run {
-                isProcessingAI = false
-                if let result {
-                    dataStore.addDream(from: session, aiResult: result)
-                }
-            }
+            await MainActor.run { isProcessingAI = true }
+            await dataStore.persistSession(completedSession)
+            await MainActor.run { isProcessingAI = false }
         }
     }
 }

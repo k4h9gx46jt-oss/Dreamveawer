@@ -9,8 +9,16 @@ import SwiftUI
 
 @main
 struct DreamWeaverApp: App {
-    @StateObject private var dataStore = SleepDataStore()
-    @StateObject private var connectivityManager = PhoneWatchConnectivityManager.shared
+    @StateObject private var dataStore: SleepDataStore
+    @StateObject private var connectivityManager: PhoneWatchConnectivityManager
+
+    init() {
+        let store = SleepDataStore()
+        let manager = PhoneWatchConnectivityManager.shared
+        manager.registerDreamStore(store)
+        _dataStore = StateObject(wrappedValue: store)
+        _connectivityManager = StateObject(wrappedValue: manager)
+    }
 
     var body: some Scene {
         WindowGroup {

@@ -21,6 +21,8 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     private var session: WCSession?
     private var currentREMStart: Date?
     private var watchReportedConnected = false
+    private var dreamStore: SleepDataStore?
+    private var pendingRemoteSessions: [RemoteSleepSessionResult] = []
 
     private override init() {
         super.init()
@@ -63,6 +65,18 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
             UIApplication.shared.open(url)
         }
         #endif
+    }
+
+    func registerDreamStore(_ store: SleepDataStore) {
+        dreamStore = store
+        guard !pendingRemoteSessions.isEmpty else { return }
+        let bufferedSessions = pendingRemoteSessions
+        pendingRemoteSessions.removeAll()
+        Task {
+            for session in bufferedSessions {
+                await store.ingestRemoteSession(session)
+            }
+        }
     }
 }
 
@@ -208,22 +222,30 @@ private extension PhoneWatchConnectivityManager {
                 remoteSessionEndedAt = nil
             }
         case "sleepEnd":
-            if let endInterval = payload["end"] as? Double {
-                let endDate = Date(timeIntervalSince1970: endInterval)
-                finalizeREMWindow(until: endDate)
-                if let list = payload["samples"] as? [[String: Double]] {
-                    sleepSamples = list.compactMap { dict in
-                        guard let timestamp = dict["timestamp"],
-                              let heartRate = dict["heartRate"],
-                              let hrv = dict["hrv"] else { return nil }
-                        return BiosignalDataPoint(timestamp: Date(timeIntervalSince1970: timestamp), heartRate: heartRate, hrv: hrv, movement: 0)
-                    }
+            guard let endInterval = payload["end"] as? Double else { return }
+            let endDate = Date(timeIntervalSince1970: endInterval)
+            finalizeREMWindow(until: endDate)
+            var decodedSamples: [BiosignalDataPoint] = []
+            if let list = payload["samples"] as? [[String: Double]] {
+                decodedSamples = list.compactMap { dict in
+                    guard let timestamp = dict["timestamp"],
+                          let heartRate = dict["heartRate"],
+                          let hrv = dict["hrv"] else { return nil }
+                    return BiosignalDataPoint(timestamp: Date(timeIntervalSince1970: timestamp), heartRate: heartRate, hrv: hrv, movement: 0)
                 }
-                remoteSessionId = UUID(uuidString: payload["sessionId"] as? String ?? "")
-                remoteSessionStart = nil
-                remoteSessionEndedAt = endDate
-                currentREMStart = nil
+                sleepSamples = decodedSamples
             }
+            let sessionIdentifier = UUID(uuidString: payload["sessionId"] as? String ?? "")
+            let startInterval = payload["start"] as? Double
+            let startDate = startInterval.map { Date(timeIntervalSince1970: $0) } ?? remoteSessionStart ?? Date(timeIntervalSince1970: endInterval)
+            remoteSessionId = sessionIdentifier
+            remoteSessionStart = nil
+            remoteSessionEndedAt = endDate
+            currentREMStart = nil
+            deliverRemoteSessionResult(RemoteSleepSessionResult(sessionId: sessionIdentifier,
+                                                                startedAt: startDate,
+                                                                endedAt: endDate,
+                                                                samples: decodedSamples))
         case "sample":
             guard let timestamp = payload["timestamp"] as? Double,
                   let heartRate = payload["heartRate"] as? Double,
@@ -257,6 +279,14 @@ private extension PhoneWatchConnectivityManager {
         if let start = currentREMStart {
             remWindows.append(SleepREMWindow(start: start, end: end))
             currentREMStart = nil
+        }
+    }
+
+    private func deliverRemoteSessionResult(_ result: RemoteSleepSessionResult) {
+        if let store = dreamStore {
+            Task { await store.ingestRemoteSession(result) }
+        } else {
+            pendingRemoteSessions.append(result)
         }
     }
 }
