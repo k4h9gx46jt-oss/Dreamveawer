@@ -80,7 +80,9 @@ struct SleepTrackingView: View {
             }
         }
         .onReceive(connectivity.$remoteSessionEndedAt) { end in
-            guard let end, isTracking, remoteControlled else { return }
+            guard let end, isTracking else { return }
+            let matchesActiveSession = connectivity.remoteSessionId == session.id
+            guard remoteControlled || matchesActiveSession else { return }
             stopTracking(triggeredByRemote: true, endDate: end)
         }
         .confirmationDialog("Apple Watch Connection", isPresented: $showingConnectionHelp, titleVisibility: .visible) {
