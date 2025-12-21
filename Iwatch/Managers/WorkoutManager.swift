@@ -408,18 +408,6 @@ private extension WorkoutManager {
         return currentREMState
     }
 
-    func samples(after date: Date?, limit: Int = 240) -> [(sample: WatchSleepSample, stage: REMState)] {
-        let filtered = samples.filter { sample in
-            guard let date else { return true }
-            return sample.timestamp > date
-        }
-        let limited = filtered.suffix(limit)
-        return limited.compactMap { sample in
-            guard let stage = sampleREMStates[sample.id] else { return nil }
-            return (sample, stage)
-        }
-    }
-
     func makeSnapshotSample() -> WatchSleepSample {
         WatchSleepSample(
             timestamp: Date(),
@@ -466,6 +454,20 @@ private extension WorkoutManager {
         min(max(value, low), high)
     }
 
+}
+
+extension WorkoutManager {
+    func recentSamples(after date: Date?, limit: Int = 240) -> [(sample: WatchSleepSample, stage: REMState)] {
+        let filtered = samples.filter { sample in
+            guard let date else { return true }
+            return sample.timestamp > date
+        }
+        let limited = filtered.suffix(limit)
+        return limited.compactMap { sample in
+            guard let stage = sampleREMStates[sample.id] else { return nil }
+            return (sample, stage)
+        }
+    }
 }
 
 struct WatchSleepSample: Identifiable, Codable {

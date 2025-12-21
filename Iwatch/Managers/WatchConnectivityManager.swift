@@ -30,7 +30,7 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
             let session = WCSession.default
             session.delegate = self
             session.activate()
-            Task { await sendConnectionState(.ready) }
+            Task { sendConnectionState(.ready) }
         }
     }
 
@@ -172,7 +172,7 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
     private func handleSamplesRequest(_ payload: [String: Any]) {
         let sinceInterval = payload["since"] as? Double ?? 0
         let sinceDate = sinceInterval > 0 ? Date(timeIntervalSince1970: sinceInterval) : nil
-        let requested = WorkoutManager.shared.samples(after: sinceDate, limit: catchupBatchLimit)
+        let requested = WorkoutManager.shared.recentSamples(after: sinceDate, limit: catchupBatchLimit)
         guard !requested.isEmpty else { return }
         let encoded = requested.map { sample, stage in
             encodedSamplePayload(for: sample, remState: stage)
