@@ -62,16 +62,13 @@ struct MultiMetricChart: View {
                                 // Explicit series keeps curves separate so no rogue connectors appear.
                                 .interpolationMethod(.catmullRom)
                                 .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                                .foregroundStyle(metric.color)
                             }
                         }
                     }
                     .chartYAxis(.hidden)
                     .chartXAxis(.hidden)
                     .chartLegend(.hidden)
-                    .chartForegroundStyleScale(
-                        domain: metrics.map { $0.label },
-                        range: metrics.map { $0.color }
-                    )
                     .padding(12)
                 }
             }
