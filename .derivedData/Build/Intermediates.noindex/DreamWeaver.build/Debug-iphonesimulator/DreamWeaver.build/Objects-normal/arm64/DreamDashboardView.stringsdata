@@ -1,0 +1,64 @@
+{
+  "source": "/Users/SEV0A/Dreamweaver/Ihpone/Views/DreamDashboardView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Dream History",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 34
+        }
+      },
+      {
+        "comment": "",
+        "key": "DreamWeaver",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 54
+        }
+      },
+      {
+        "comment": "",
+        "key": "See What Your Mind Creates",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 63
+        }
+      },
+      {
+        "comment": "",
+        "key": "Session running on your Apple Watch",
+        "location": {
+          "startingColumn": 50,
+          "startingLine": 83
+        }
+      },
+      {
+        "comment": "",
+        "key": "Track your sleep and visualize\nyour dreams",
+        "location": {
+          "startingColumn": 90,
+          "startingLine": 83
+        }
+      },
+      {
+        "comment": "",
+        "key": "Dreaming",
+        "location": {
+          "startingColumn": 54,
+          "startingLine": 78
+        }
+      },
+      {
+        "comment": "",
+        "key": "Start Dream Mode",
+        "location": {
+          "startingColumn": 67,
+          "startingLine": 78
+        }
+      }
+    ]
+  },
+  "version": 1
+}

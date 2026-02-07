@@ -1,0 +1,32 @@
+{
+  "source": "/Users/SEV0A/Dreamweaver/Ihpone/Views/Components/LastDreamCard.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Last Dream",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 10
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lldh %lldm",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 25
+        }
+      },
+      {
+        "comment": "",
+        "key": "REM %lld%%",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 26
+        }
+      }
+    ]
+  },
+  "version": 1
+}
