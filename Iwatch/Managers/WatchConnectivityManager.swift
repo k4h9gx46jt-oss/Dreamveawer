@@ -30,8 +30,13 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
             let session = WCSession.default
             session.delegate = self
             session.activate()
-            Task { sendConnectionState(.ready) }
+            Task { sendCurrentState() }
         }
+    }
+
+    func sendCurrentState() {
+        let state: ConnectionState = WorkoutManager.shared.isTracking ? .tracking : .ready
+        sendConnectionState(state)
     }
 
     func sendSnapshot(sample: WatchSleepSample) {
@@ -52,10 +57,14 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
 
     func sendConnectionState(_ state: ConnectionState) {
         currentState = state
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "status": state.rawValue,
             "connected": state != .inactive
         ]
+        let snapshot = currentStatusSnapshot()
+        payload["tracking"] = snapshot["tracking"]
+        payload["sessionId"] = snapshot["sessionId"]
+        payload["start"] = snapshot["start"]
         transmit(message: payload)
     }
 

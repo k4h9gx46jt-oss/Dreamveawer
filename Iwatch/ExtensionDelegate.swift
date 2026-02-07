@@ -12,7 +12,7 @@ final class ExtensionDelegate: NSObject, WKExtensionDelegate {
     func applicationDidFinishLaunching() {
         Task { @MainActor in
             WatchSideConnectivityManager.shared.flushBufferedSamplesIfNeeded()
-            WatchSideConnectivityManager.shared.sendConnectionState(.ready)
+            WatchSideConnectivityManager.shared.sendCurrentState()
             processPendingCommands()
         }
     }
@@ -20,14 +20,14 @@ final class ExtensionDelegate: NSObject, WKExtensionDelegate {
     func applicationDidBecomeActive() {
         Task { @MainActor in
             WatchSideConnectivityManager.shared.flushBufferedSamplesIfNeeded()
-            WatchSideConnectivityManager.shared.sendConnectionState(.ready)
+            WatchSideConnectivityManager.shared.sendCurrentState()
             processPendingCommands()
         }
     }
 
     func applicationWillResignActive() {
         Task { @MainActor in
-            WatchSideConnectivityManager.shared.sendConnectionState(.inactive)
+            WatchSideConnectivityManager.shared.sendCurrentState()
         }
     }
 
