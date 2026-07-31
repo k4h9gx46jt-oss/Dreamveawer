@@ -1,6 +1,0 @@
-Target dependency graph (3 targets)
-Target 'DreamWeaver' in project 'DreamWeaver'
-➜ Explicit dependency on target 'DreamWeaver WatchKit App' in project 'DreamWeaver'
-Target 'DreamWeaver WatchKit App' in project 'DreamWeaver'
-➜ Explicit dependency on target 'DreamWeaver WatchKit Extension' in project 'DreamWeaver'
-Target 'DreamWeaver WatchKit Extension' in project 'DreamWeaver' (no dependencies)
