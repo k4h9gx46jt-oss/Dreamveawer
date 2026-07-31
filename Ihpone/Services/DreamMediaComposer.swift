@@ -156,7 +156,7 @@ private extension DreamMediaComposer {
     }
 }
 
-private struct DreamMediaPrompt {
+struct DreamMediaPrompt {
     let dream: SleepData
     let profile: REMDreamProfile
     let motionEnergy: Double
@@ -190,7 +190,7 @@ private struct DreamMediaPrompt {
     }
 }
 
-private struct DreamScoreRender {
+struct DreamScoreRender {
     let url: URL
     let waveform: [Double]
     let diagnostics: [String: String]
@@ -234,7 +234,7 @@ enum DreamGenre: String {
     }
 }
 
-private struct DreamScoreProfile {
+struct DreamScoreProfile {
     enum LeadVoice { case violin, flute, bell, brass, leadGuitar }
     enum ArpVoice { case harp, glass, pluck, palmMute }
     enum Percussion { case orchestral, cinematic, rockKit, metalKit }
@@ -655,7 +655,7 @@ private final class DreamMediaCache {
     }
 }
 
-private enum DreamScoreRenderer {
+enum DreamScoreRenderer {
     /// Renders a stereo, tempo-locked arrangement and returns a normalised RMS waveform for the UI.
     static func render(to url: URL, profile: DreamScoreProfile, duration: TimeInterval) throws -> [Double] {
         let sampleRate: Double = 44_100

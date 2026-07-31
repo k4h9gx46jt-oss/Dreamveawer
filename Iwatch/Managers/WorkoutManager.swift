@@ -24,6 +24,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published private(set) var remWindows: [REMWindow] = []
     @Published private(set) var currentREMState: REMState = .light
     private var sampleREMStates: [UUID: REMState] = [:]
+    private var remClassifier = REMClassifier()
 
     private let healthStore = HKHealthStore()
     private var workoutSession: HKWorkoutSession?
@@ -61,6 +62,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         samples.removeAll()
         sampleREMStates.removeAll()
         remWindows.removeAll()
+        remClassifier = REMClassifier()
         currentREMState = .light
         baselineAdvancedSignals()
         lastHealthKitSampleDate = nil
@@ -118,6 +120,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         samples.removeAll()
         sampleREMStates.removeAll()
         remWindows.removeAll()
+        remClassifier = REMClassifier()
         currentREMState = .light
         baselineAdvancedSignals()
         lastHealthKitSampleDate = nil
@@ -390,22 +393,12 @@ private extension WorkoutManager {
 
     @discardableResult
     func updateREM(using sample: WatchSleepSample) -> REMState {
-        let lowHRV = sample.hrv < 35
-        if sample.heartRate >= 50 && sample.heartRate <= 75 && !lowHRV {
-            if currentREMState != .rem {
-                let window = REMWindow(start: sample.timestamp, end: sample.timestamp.addingTimeInterval(60))
-                remWindows.append(window)
-            } else if var last = remWindows.popLast() {
-                last = last.extended(to: sample.timestamp)
-                remWindows.append(last)
-            }
-            currentREMState = .rem
-        } else if sample.heartRate < 50 {
-            currentREMState = .deep
-        } else {
-            currentREMState = .light
-        }
-        return currentREMState
+        let stage = remClassifier.ingest(heartRate: sample.heartRate,
+                                         heartRateVariability: sample.hrv,
+                                         timestamp: sample.timestamp)
+        remWindows = remClassifier.windows
+        currentREMState = stage
+        return stage
     }
 
     func makeSnapshotSample() -> WatchSleepSample {
@@ -509,26 +502,4 @@ struct WatchSleepSample: Identifiable, Codable {
         self.noiseExposure = noiseExposure
         self.apneaRisk = apneaRisk
     }
-}
-
-struct REMWindow: Identifiable, Codable {
-    let id: UUID
-    let start: Date
-    let end: Date
-
-    init(id: UUID = UUID(), start: Date, end: Date) {
-        self.id = id
-        self.start = start
-        self.end = end
-    }
-
-    func extended(to date: Date) -> REMWindow {
-        REMWindow(id: id, start: start, end: date)
-    }
-}
-
-enum REMState: String, Codable {
-    case light
-    case deep
-    case rem
 }

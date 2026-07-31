@@ -844,12 +844,6 @@ private enum WatchSideStatus: String {
     case tracking
 }
 
-private enum REMState: String {
-    case light
-    case deep
-    case rem
-}
-
 private struct MockSampleGenerator {
     private var referenceDate = Date()
     private var temperatureDelta: Double = 0

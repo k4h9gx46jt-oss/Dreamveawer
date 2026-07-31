@@ -113,6 +113,11 @@
 			path = ../../Iwatch;
 			sourceTree = "<group>";
 		};
+		CB6FF0022F3A000000000002 /* ../../Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ../../Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,6 +160,7 @@
 				CB6DF1012EF6B1230019840D /* ../Services */,
 				CB6DF1022EF6B1230019840D /* ../Views */,
 				CB6DF1102EF6BC7F0019840D /* ../../Iwatch */,
+				CB6FF0022F3A000000000002 /* ../../Shared */,
 				CB6FF0012F3A000000000001 /* IwatchAppAssets.xcassets */,
 				CB6DEA6E2EF6AAAC0019840D /* DreamWeaverTests */,
 				CB6DEA782EF6AAAC0019840D /* DreamWeaverUITests */,
@@ -196,6 +202,7 @@
 				CB6DF1002EF6B1230019840D /* ../Models */,
 				CB6DF1012EF6B1230019840D /* ../Services */,
 				CB6DF1022EF6B1230019840D /* ../Views */,
+				CB6FF0022F3A000000000002 /* ../../Shared */,
 			);
 			name = DreamWeaver;
 			packageProductDependencies = (
@@ -281,6 +288,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				CB6DF1102EF6BC7F0019840D /* ../../Iwatch */,
+				CB6FF0022F3A000000000002 /* ../../Shared */,
 			);
 			name = "DreamWeaver WatchKit Extension";
 			productName = "DreamWeaver WatchKit Extension";
