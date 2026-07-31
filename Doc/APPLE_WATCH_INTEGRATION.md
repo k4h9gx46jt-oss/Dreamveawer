@@ -95,10 +95,17 @@ Application context is also used for control-state reconciliation:
 | Message type | Purpose |
 | --- | --- |
 | `sleepStart` | Session began on the watch |
-| `sleepEnd` | Session ended, includes the full sample set |
+| `sleepEnd` | Session ended, includes the full sample set with movement and per-sample stage |
 | `sample` | A single live sample |
 | `sampleBatch` | Batched samples (backfill or catch-up) |
 | `statusRequest` | Ask the phone for its current control state |
+
+Every transported sample carries `movement` and `remState`. The phone stores the
+watch's staging rather than re-deriving it — re-deriving from movement alone made
+a still night read as entirely REM and a restless night as no REM at all.
+
+> Sample dictionaries are `[String: Any]`, not `[String: Double]`. `remState` is a
+> string, so a `[[String: Double]]` cast silently drops the whole batch.
 
 Connection state is reported as one of `inactive`, `ready`, `tracking`.
 
@@ -166,6 +173,7 @@ struct BiosignalDataPoint: Identifiable, Codable {
     let sleepScore: Double
     let noiseExposure: Double
     let apneaRisk: Double
+    let sleepStage: REMState?
 }
 ```
 

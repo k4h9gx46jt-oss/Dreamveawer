@@ -60,7 +60,9 @@ This cadence is aggressive and is a **known battery risk** (see
 | Movement veto on REM | ✅ | REM requires muscle atonia, so a restless wrist rules it out |
 | Temporal smoothing | ✅ | 7-sample majority vote stops 1 Hz sampling flipping the stage every second |
 | REM window accumulation | ✅ | `REMWindow`, extended while REM persists |
-| `REMDreamProfile` / `REMSegment` aggregation | ✅ | 60 s buckets, dominant-driver detection |
+| Stage transported to the phone | ✅ | `remState` on live samples **and** in the `sleepEnd` payload |
+| `REMDreamProfile` / `REMSegment` aggregation | ✅ | 60 s buckets driven by the recorded stage, majority vote per bucket |
+| Guaranteed profile when samples exist | ✅ | A nil profile makes film generation throw, so one segment is always produced |
 | Machine-learning sleep staging | ❌ | Still deterministic rules, now personalised |
 | `HKCategoryType.sleepAnalysis` cross-check | 🟡 | Read for auto-start, not yet used to correct staging |
 
@@ -223,13 +225,14 @@ SwiftData usage in the repository is the unused Xcode template file
 | `DreamScoreTests` | 319 | Musical phrase structure, tempo, genre selection |
 | `DreamMediaCompositionTests` | 226 | Composer orchestration, prompt building |
 | `SleepAutoStartTests` | 232 | Sleep window arithmetic, schedule inference, onset detection |
+| `REMProfileTests` | 175 | Stage-driven segmentation, guaranteed profile, transport round trips |
 | `DreamSessionTests` | 213 | Session lifecycle, averages, REM profiling |
 | `DreamFilmTests` | 181 | Visual profile derivation, renderer configuration |
 | `WatchREMClassifierTests` | 300 | Staging rules, personalised baseline, movement, smoothing |
 | `DreamFixture` | 109 | Shared test data |
 | `DreamWeaverUITests` | 74 | Launch smoke tests |
 
-113 tests pass. Run with [`run-tests.sh`](../run-tests.sh).
+122 tests pass. Run with [`run-tests.sh`](../run-tests.sh).
 
 ---
 

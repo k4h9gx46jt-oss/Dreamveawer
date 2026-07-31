@@ -60,15 +60,27 @@ struct DreamSessionTests {
         #expect(profile.moodPolarity >= -1 && profile.moodPolarity <= 1)
     }
 
-    @Test("Restless samples produce no REM segments")
-    func restlessSleepHasNoREM() {
+    @Test("Restless sleep still yields a profile so a film can be rendered")
+    func restlessSleepStillProfiles() throws {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
-        var session = SleepSession(startedAt: start,
-                                   biosignals: DreamFixture.biosignals(from: start, count: 40, movement: 0.9))
-        session.finish()
-        session.analyzeREMProfile()
+        var restless = SleepSession(startedAt: start,
+                                    biosignals: DreamFixture.biosignals(from: start, count: 40, movement: 0.9))
+        restless.finish()
+        restless.analyzeREMProfile()
 
-        #expect(session.remProfile == nil)
+        var settled = SleepSession(startedAt: start,
+                                   biosignals: DreamFixture.biosignals(from: start, count: 40, movement: 0.05))
+        settled.finish()
+        settled.analyzeREMProfile()
+
+        // A missing profile makes DreamMediaComposer throw, which would leave a
+        // recorded night with no dream film at all.
+        let profile = try #require(restless.remProfile)
+        #expect(!profile.segments.isEmpty)
+
+        // Restlessness still has to register as less REM than a settled night.
+        let settledProfile = try #require(settled.remProfile)
+        #expect(profile.segments.count < settledProfile.segments.count)
     }
 
     @Test("A session without samples has no REM profile")
