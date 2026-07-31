@@ -21,7 +21,8 @@ struct ContentView: View {
                 )
             }
             .padding(.top, 8)
-            .navigationTitle("DreamWeaver")
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showingTracking) {
                 SleepTrackingView()
                     .presentationDetents([.large])

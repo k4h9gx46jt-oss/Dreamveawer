@@ -70,9 +70,7 @@ struct WatchContentView: View {
 
     private var overviewStack: some View {
         VStack(spacing: 12) {
-            Text("DreamWeaver")
-                .font(.headline)
-                .foregroundStyle(.white)
+            DreamWeaverWordmark(size: 22)
 
             connectionBadge
 

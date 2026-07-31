@@ -51,9 +51,8 @@ struct DreamDashboardView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("DreamWeaver")
-                .font(.system(size: 34, weight: .bold, design: .default))
-                .foregroundStyle(.black)
+            DreamWeaverWordmark(size: 38)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal)
 
             VStack(spacing: 8) {
