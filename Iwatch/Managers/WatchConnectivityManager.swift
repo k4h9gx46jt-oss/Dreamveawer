@@ -205,7 +205,8 @@ final class WatchSideConnectivityManager: NSObject, ObservableObject {
                 "temperatureDelta": sample.temperatureDelta,
                 "sleepScore": sample.sleepScore,
                 "noiseExposure": sample.noiseExposure,
-                "apneaRisk": sample.apneaRisk
+                "apneaRisk": sample.apneaRisk,
+                "movement": sample.movement
             ]
         }
 
@@ -389,7 +390,12 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
 
 enum SessionEvent {
     case started(id: UUID, start: Date)
-    case ended(id: UUID, start: Date, end: Date, samples: [WatchSleepSample])
+    case ended(id: UUID, start: Date, end: Date, samples: [StagedSample])
+
+    struct StagedSample {
+        let sample: WatchSleepSample
+        let stage: REMState
+    }
 
     var payload: [String: Any] {
         switch self {
@@ -400,8 +406,9 @@ enum SessionEvent {
                 "start": start.timeIntervalSince1970
             ]
         case let .ended(id, start, end, samples):
-            let encodedSamples = samples.prefix(1000).map { sample in
-                [
+            let encodedSamples: [[String: Any]] = samples.prefix(1000).map { staged in
+                let sample = staged.sample
+                return [
                     "timestamp": sample.timestamp.timeIntervalSince1970,
                     "heartRate": sample.heartRate,
                     "hrv": sample.hrv,
@@ -412,7 +419,9 @@ enum SessionEvent {
                     "temperatureDelta": sample.temperatureDelta,
                     "sleepScore": sample.sleepScore,
                     "noiseExposure": sample.noiseExposure,
-                    "apneaRisk": sample.apneaRisk
+                    "apneaRisk": sample.apneaRisk,
+                    "movement": sample.movement,
+                    "remState": staged.stage.rawValue
                 ]
             }
             return [

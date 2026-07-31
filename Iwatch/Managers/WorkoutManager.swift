@@ -18,13 +18,15 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published var currentSleepScore: Double = 85
     @Published var currentNoiseExposure: Double = 30
     @Published var currentApneaRisk: Double = 0.05
+    @Published var currentMovement: Double = 0
     @Published var elapsed: TimeInterval = 0
     @Published private(set) var sessionStartDate: Date?
     @Published private(set) var samples: [WatchSleepSample] = []
     @Published private(set) var remWindows: [REMWindow] = []
     @Published private(set) var currentREMState: REMState = .light
+    @Published private(set) var startedAutomatically = false
     private var sampleREMStates: [UUID: REMState] = [:]
-    private var remClassifier = REMClassifier()
+    private var remClassifier = REMClassifier(configuration: .overnight)
 
     private let healthStore = HKHealthStore()
     private var workoutSession: HKWorkoutSession?
@@ -43,6 +45,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         static let tracking = "dw.watch.tracking"
         static let start = "dw.watch.sessionStart"
         static let sessionId = "dw.watch.sessionId"
+        static let autoStarted = "dw.watch.autoStarted"
     }
 
     private override init() {
@@ -54,7 +57,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         isTracking ? sessionId : nil
     }
 
-    func start(remoteSessionId: UUID? = nil) {
+    func start(remoteSessionId: UUID? = nil, automatically: Bool = false) {
         guard !isTracking else { return }
         Task { try? await requestAuthorization() }
         configureWorkout()
@@ -62,13 +65,15 @@ final class WorkoutManager: NSObject, ObservableObject {
         samples.removeAll()
         sampleREMStates.removeAll()
         remWindows.removeAll()
-        remClassifier = REMClassifier()
+        remClassifier = REMClassifier(configuration: .overnight)
         currentREMState = .light
         baselineAdvancedSignals()
+        MotionManager.shared.start()
         lastHealthKitSampleDate = nil
         sessionId = remoteSessionId ?? UUID()
         sessionStartDate = Date()
         isTracking = true
+        startedAutomatically = automatically
         startElapsedTimer()
         Task { @MainActor in
             WatchSideConnectivityManager.shared.sendConnectionState(.tracking)
@@ -120,11 +125,13 @@ final class WorkoutManager: NSObject, ObservableObject {
         samples.removeAll()
         sampleREMStates.removeAll()
         remWindows.removeAll()
-        remClassifier = REMClassifier()
+        remClassifier = REMClassifier(configuration: .overnight)
         currentREMState = .light
         baselineAdvancedSignals()
+        MotionManager.shared.start()
         lastHealthKitSampleDate = nil
         isTracking = true
+        startedAutomatically = persistence.bool(forKey: PersistenceKeys.autoStarted)
         startElapsedTimer()
         startPushTimer()
         startScheduledSampleTimer()
@@ -160,8 +167,12 @@ final class WorkoutManager: NSObject, ObservableObject {
             .environmentalAudioExposure
         ]
         let quantityTypes = identifiers.compactMap { HKObjectType.quantityType(forIdentifier: $0) }
-        guard !quantityTypes.isEmpty else { return }
-        try await healthStore.requestAuthorization(toShare: [], read: Set(quantityTypes))
+        var readTypes = Set<HKObjectType>(quantityTypes)
+        if let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) {
+            readTypes.insert(sleepType)
+        }
+        guard !readTypes.isEmpty else { return }
+        try await healthStore.requestAuthorization(toShare: [], read: readTypes)
     }
 
     private func startElapsedTimer() {
@@ -234,13 +245,15 @@ final class WorkoutManager: NSObject, ObservableObject {
         workoutSession = nil
         builder = nil
         stopTimers()
+        MotionManager.shared.stop()
         isTracking = false
+        startedAutomatically = false
         endExtendedRuntimeSession()
         sessionStartDate = nil
         lastHealthKitSampleDate = nil
         WatchSideConnectivityManager.shared.sendSnapshot(sample: makeSnapshotSample())
         if notifyPhone {
-            WatchSideConnectivityManager.shared.sendSessionEvent(.ended(id: sessionId, start: startDate, end: endDate, samples: samples))
+            WatchSideConnectivityManager.shared.sendSessionEvent(.ended(id: sessionId, start: startDate, end: endDate, samples: stagedSamples()))
         }
         WatchSideConnectivityManager.shared.forceFlushOfflineSamples()
         Task { @MainActor in
@@ -253,12 +266,14 @@ final class WorkoutManager: NSObject, ObservableObject {
         persistence.set(isTracking, forKey: PersistenceKeys.tracking)
         persistence.set(sessionStartDate?.timeIntervalSince1970, forKey: PersistenceKeys.start)
         persistence.set(sessionId.uuidString, forKey: PersistenceKeys.sessionId)
+        persistence.set(startedAutomatically, forKey: PersistenceKeys.autoStarted)
     }
 
     private func clearPersistedSession() {
         persistence.removeObject(forKey: PersistenceKeys.tracking)
         persistence.removeObject(forKey: PersistenceKeys.start)
         persistence.removeObject(forKey: PersistenceKeys.sessionId)
+        persistence.removeObject(forKey: PersistenceKeys.autoStarted)
     }
 
     private func restorePersistedSessionIfNeeded() {
@@ -361,6 +376,7 @@ private extension WorkoutManager {
         if isHealthKitStale {
             synthesizeCoreCardioSignals()
         }
+        currentMovement = MotionManager.shared.movement
         synthesizeAdvancedSignals()
         recordSample()
     }
@@ -395,6 +411,7 @@ private extension WorkoutManager {
     func updateREM(using sample: WatchSleepSample) -> REMState {
         let stage = remClassifier.ingest(heartRate: sample.heartRate,
                                          heartRateVariability: sample.hrv,
+                                         movement: sample.movement,
                                          timestamp: sample.timestamp)
         remWindows = remClassifier.windows
         currentREMState = stage
@@ -413,7 +430,8 @@ private extension WorkoutManager {
             temperatureDelta: currentTemperatureDelta,
             sleepScore: currentSleepScore,
             noiseExposure: currentNoiseExposure,
-            apneaRisk: currentApneaRisk
+            apneaRisk: currentApneaRisk,
+            movement: currentMovement
         )
     }
 
@@ -450,6 +468,15 @@ private extension WorkoutManager {
 }
 
 extension WorkoutManager {
+    /// Pairs every recorded sample with the stage the classifier assigned to it, so
+    /// the phone persists the watch's staging instead of re-deriving it.
+    func stagedSamples() -> [SessionEvent.StagedSample] {
+        samples.map { sample in
+            SessionEvent.StagedSample(sample: sample,
+                                      stage: sampleREMStates[sample.id] ?? .light)
+        }
+    }
+
     func recentSamples(after date: Date?, limit: Int = 240) -> [(sample: WatchSleepSample, stage: REMState)] {
         let filtered = samples.filter { sample in
             guard let date else { return true }
@@ -476,6 +503,7 @@ struct WatchSleepSample: Identifiable, Codable {
     let sleepScore: Double
     let noiseExposure: Double
     let apneaRisk: Double
+    let movement: Double
 
     init(id: UUID = UUID(),
          timestamp: Date,
@@ -488,7 +516,8 @@ struct WatchSleepSample: Identifiable, Codable {
          temperatureDelta: Double,
          sleepScore: Double,
          noiseExposure: Double,
-         apneaRisk: Double) {
+         apneaRisk: Double,
+         movement: Double = 0) {
         self.id = id
         self.timestamp = timestamp
         self.heartRate = heartRate
@@ -501,5 +530,6 @@ struct WatchSleepSample: Identifiable, Codable {
         self.sleepScore = sleepScore
         self.noiseExposure = noiseExposure
         self.apneaRisk = apneaRisk
+        self.movement = movement
     }
 }

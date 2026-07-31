@@ -14,6 +14,9 @@ struct BiosignalDataPoint: Identifiable, Codable {
     let sleepScore: Double
     let noiseExposure: Double
     let apneaRisk: Double
+    /// Stage assigned by the watch classifier. Nil for samples recorded before
+    /// staging was transported, or for locally simulated sessions.
+    let sleepStage: REMState?
 
     init(id: UUID = UUID(),
          timestamp: Date,
@@ -27,7 +30,8 @@ struct BiosignalDataPoint: Identifiable, Codable {
          wristTemperatureDelta: Double = 0,
          sleepScore: Double = 0,
          noiseExposure: Double = 0,
-         apneaRisk: Double = 0) {
+         apneaRisk: Double = 0,
+         sleepStage: REMState? = nil) {
         self.id = id
         self.timestamp = timestamp
         self.heartRate = heartRate
@@ -41,5 +45,6 @@ struct BiosignalDataPoint: Identifiable, Codable {
         self.sleepScore = sleepScore
         self.noiseExposure = noiseExposure
         self.apneaRisk = apneaRisk
+        self.sleepStage = sleepStage
     }
 }

@@ -123,7 +123,10 @@ struct SleepSession {
     }
 }
 
-private extension REMDreamProfile {
+extension REMDreamProfile {
+    /// Movement ceiling used only when a sample carries no stage from the watch.
+    static let fallbackMovementCeiling: Double = 0.45
+
     static func build(from samples: [BiosignalDataPoint], defaultStart: Date, defaultEnd: Date) -> REMDreamProfile? {
         let ordered = samples.sorted { $0.timestamp < $1.timestamp }
         guard let firstTimestamp = ordered.first?.timestamp else { return nil }
@@ -152,7 +155,18 @@ private extension REMDreamProfile {
             flush(until: last)
         }
 
-        guard !segments.isEmpty else { return nil }
+        // A night with no REM at all still has to produce a profile: the media
+        // pipeline treats a missing profile as a hard failure, which would leave
+        // the user with a recorded night and no dream film.
+        if segments.isEmpty {
+            guard let fallback = Self.makeSegment(from: ordered,
+                                                  start: firstTimestamp,
+                                                  end: ordered.last?.timestamp ?? defaultEnd,
+                                                  ignoringStage: true) else {
+                return nil
+            }
+            segments = [fallback]
+        }
 
         let totalDuration = segments.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
         let intensityScore = segments.map { $0.intensity }.average()
@@ -176,10 +190,13 @@ private extension REMDreamProfile {
         )
     }
 
-    static func makeSegment(from samples: [BiosignalDataPoint], start: Date, end: Date) -> REMSegment? {
+    static func makeSegment(from samples: [BiosignalDataPoint],
+                            start: Date,
+                            end: Date,
+                            ignoringStage: Bool = false) -> REMSegment? {
         guard !samples.isEmpty else { return nil }
-        let movementAvg = samples.map { $0.movement }.average()
-        guard movementAvg <= 0.45 else { return nil }
+
+        if !ignoringStage, !Self.isREM(samples) { return nil }
 
         let heartAvg = samples.map { $0.heartRate }.average()
         let hrvAvg = samples.map { $0.hrv }.average()
@@ -215,6 +232,16 @@ private extension REMDreamProfile {
             intensity: intensity,
             moodPolarity: moodPolarity
         )
+    }
+
+    /// Prefers the stage the watch classifier already assigned. The movement
+    /// heuristic is only a fallback for samples that carry no stage.
+    static func isREM(_ samples: [BiosignalDataPoint]) -> Bool {
+        let staged = samples.compactMap(\.sleepStage)
+        if !staged.isEmpty {
+            return Double(staged.filter { $0 == .rem }.count) / Double(staged.count) >= 0.5
+        }
+        return samples.map { $0.movement }.average() <= fallbackMovementCeiling
     }
 }
 

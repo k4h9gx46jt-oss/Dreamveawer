@@ -33,9 +33,11 @@
 		<string>$(PRODUCT_MODULE_NAME).ExtensionDelegate</string>
 	</dict>
 	<key>NSHealthShareUsageDescription</key>
-	<string>DreamWeaver reads your heart rate and HRV to keep Dream Mode metrics live.</string>
+	<string>DreamWeaver reads your heart rate, HRV and sleep data to track Dream Mode sessions and to start them automatically at your usual bedtime.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>DreamWeaver writes workout session data so your dream history stays in sync.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>DreamWeaver reads wrist motion to tell restless sleep from REM and to detect when you have fallen asleep.</string>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>4</integer>

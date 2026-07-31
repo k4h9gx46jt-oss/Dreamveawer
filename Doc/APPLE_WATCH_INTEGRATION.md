@@ -24,7 +24,7 @@ Twelve values are recorded per sample.
 | SpO₂ | HealthKit | ✅ real |
 | Respiratory rate | HealthKit | ✅ real |
 | Environmental audio exposure | HealthKit | ✅ real |
-| Movement | Motion | ✅ real |
+| Movement | CoreMotion | ✅ real — `MotionManager`, 1 Hz, normalised to `0...1` |
 | Wrist temperature delta | Mixed | 🟡 partly synthesised |
 | ECG confidence | — | 🟡 placeholder, no `HKElectrocardiogram` read |
 | Hypertension risk | Derived | 🟡 heuristic, **not clinical** |

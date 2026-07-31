@@ -38,9 +38,10 @@ this file wins.
 | Hypertension risk | 🟡 | Derived heuristic, **not a clinical measurement** |
 | Apnea risk | 🟡 | Derived heuristic, **not a clinical measurement** |
 | Sleep score | 🟡 | Derived heuristic |
-| Movement / motion | ✅ | Drives REM segmentation |
+| Movement / motion | ✅ | `MotionManager`, CoreMotion accelerometer at 1 Hz, normalised to `0...1` |
 | Session persistence across watch app relaunch | ✅ | `UserDefaults`-backed, see `WorkoutManager.restorePersistedSessionIfNeeded()` |
 | Background wake when the watch app is closed | ✅ | `RemoteCommandStore` + `WKExtension` background refresh |
+| **Automatic Dream Mode start** | ✅ | `SleepAutoStartMonitor` — see §2.1 |
 
 **Sampling cadence:** `pushInterval = 5` seconds, `scheduledSampleInterval = 1` second.
 Older docs claimed 5 *minutes* — that has never matched the shipped code.
@@ -54,16 +55,53 @@ This cadence is aggressive and is a **known battery risk** (see
 | Capability | Status | Notes |
 | --- | --- | --- |
 | Rule-based REM/deep/light classifier | ✅ | `Shared/REMClassifier.swift`, unit tested |
+| `awake` stage | ✅ | Movement above `0.55` overrides every sleep stage |
+| Personalised thresholds | ✅ | `SleepBaseline` tracks the sleeper's own resting floor and typical HRV |
+| Movement veto on REM | ✅ | REM requires muscle atonia, so a restless wrist rules it out |
+| Temporal smoothing | ✅ | 7-sample majority vote stops 1 Hz sampling flipping the stage every second |
 | REM window accumulation | ✅ | `REMWindow`, extended while REM persists |
 | `REMDreamProfile` / `REMSegment` aggregation | ✅ | 60 s buckets, dominant-driver detection |
-| Machine-learning sleep staging | ❌ | Currently pure thresholds on HR + HRV |
-| `HKCategoryType.sleepAnalysis` cross-check | ❌ | Apple's own staging is never read back |
+| Machine-learning sleep staging | ❌ | Still deterministic rules, now personalised |
+| `HKCategoryType.sleepAnalysis` cross-check | 🟡 | Read for auto-start, not yet used to correct staging |
 
-Classifier thresholds (`REMClassifier`):
+Default (population) thresholds, used until the baseline warms up after 60 readings:
 
 - Heart rate `< 50` → `deep`
 - Heart rate in `50...75` **and** HRV `>= 35` → `rem`
 - Otherwise → `light`
+
+Once warmed up these become relative to the sleeper: deep below `resting × 0.97`,
+REM inside `resting × 0.97 ... resting × 1.28` with HRV above `typical × 0.75`.
+This was the fix for fixed thresholds mis-staging anyone whose resting rate is not
+near 60 bpm.
+
+`REMClassifier.Configuration.legacy` preserves the original single-reading
+behaviour; the watch runs `.overnight`.
+
+### 2.1 Automatic start
+
+`SleepAutoStartMonitor` arms Dream Mode without a button press. Either trigger is
+sufficient:
+
+1. **The system reports sleep.** An `HKObserverQuery` on `sleepAnalysis` with
+   background delivery wakes the extension when watchOS records an `asleep*`
+   sample.
+2. **Our own readings agree inside the sleep window.** `SleepOnsetDetector`
+   requires sustained low motion *and* a heart rate at or below the resting
+   baseline. Both are needed — lying still while reading is not sleep.
+
+The nightly window is inferred from the user's existing Health app history
+(`SleepWindow.inferred(from:)`, circular mean over the last 14 nights), so the
+bedtime never has to be entered twice. Heart-rate polling only runs inside that
+window.
+
+| Capability | Status |
+| --- | --- |
+| Auto-start from system sleep detection | ✅ |
+| Auto-start from own biosignals inside the window | ✅ |
+| Sleep window inferred from Health history | ✅ |
+| User override of the inferred window | ❌ no settings UI yet |
+| Auto-**stop** on waking | ❌ |
 
 ---
 
@@ -184,13 +222,14 @@ SwiftData usage in the repository is the unused Xcode template file
 | --- | --- | --- |
 | `DreamScoreTests` | 319 | Musical phrase structure, tempo, genre selection |
 | `DreamMediaCompositionTests` | 226 | Composer orchestration, prompt building |
+| `SleepAutoStartTests` | 232 | Sleep window arithmetic, schedule inference, onset detection |
 | `DreamSessionTests` | 213 | Session lifecycle, averages, REM profiling |
 | `DreamFilmTests` | 181 | Visual profile derivation, renderer configuration |
-| `WatchREMClassifierTests` | 180 | Sleep-stage rules and window accumulation |
+| `WatchREMClassifierTests` | 300 | Staging rules, personalised baseline, movement, smoothing |
 | `DreamFixture` | 109 | Shared test data |
 | `DreamWeaverUITests` | 74 | Launch smoke tests |
 
-Run with [`run-tests.sh`](../run-tests.sh). See [TESTING section in the root README](../README.md).
+113 tests pass. Run with [`run-tests.sh`](../run-tests.sh).
 
 ---
 

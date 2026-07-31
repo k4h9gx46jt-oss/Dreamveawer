@@ -20,8 +20,11 @@ see [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md). For current state see
 | `HKWorkoutSession` + `HKLiveWorkoutBuilder` | `.other` / `.indoor` |
 | Live heart rate and HRV | Real HealthKit reads |
 | SpO₂, respiratory rate, environmental audio exposure | Real HealthKit reads |
-| Motion / movement capture | Feeds REM segmentation |
-| Rule-based REM/deep/light staging | `Shared/REMClassifier.swift`, unit tested |
+| Motion / movement capture | `MotionManager`, CoreMotion at 1 Hz, normalised to `0...1` |
+| Personalised REM/deep/light staging | `Shared/REMClassifier.swift` + `SleepBaseline`, unit tested |
+| Movement veto on REM, `awake` stage, 7-sample smoothing | |
+| **Automatic Dream Mode start** | `SleepAutoStartMonitor` — system sleep detection or own biosignals inside the inferred sleep window |
+| Sleep window inferred from Health history | `SleepWindow.inferred(from:)` |
 | Bidirectional start/stop with the iPhone | Either device can drive |
 | Live sample streaming + batch backfill | 5 s push cadence |
 | Application-context fallback when unreachable | |
@@ -75,8 +78,15 @@ indicator, no animation. Respect always-on display budgets and Reduce Motion.
 ### 4.2 Smart Wake
 
 Wake within a user-chosen window at the lightest detected stage, with escalating
-haptics. `REMClassifier` already provides the signal. Needs a reliable watch-side
-alarm path and a fallback when the watch is off-wrist.
+haptics. `REMClassifier` already provides the signal, and `SleepWindow` already
+models the window. Needs a reliable watch-side alarm path and a fallback when the
+watch is off-wrist.
+
+### 4.2.1 Automatic stop
+
+Auto-start exists; auto-stop does not. A session started automatically should end
+itself when `SleepWindow.nextEnd` passes or sustained `.awake` staging is observed,
+otherwise an unattended session runs until the 12-hour cap.
 
 ### 4.3 Lucid dream training
 
@@ -91,10 +101,11 @@ complication.
 
 ### 4.5 Improved staging
 
-- Cross-check against `HKCategoryType.sleepAnalysis` where available
-- Replace fixed thresholds with a personalised baseline (each user's own resting
-  HR and HRV distribution)
+- Cross-check against `HKCategoryType.sleepAnalysis` where available — it is
+  already read for auto-start, but not yet used to correct our own staging
 - Evaluate a small Core ML classifier once labelled data exists
+- Persist the learned `SleepBaseline` between nights so staging is accurate from
+  the first reading instead of after a 60-sample warm-up
 
 ### 4.6 Real ECG
 

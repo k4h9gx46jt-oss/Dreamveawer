@@ -14,6 +14,7 @@ final class ExtensionDelegate: NSObject, WKExtensionDelegate {
             WatchSideConnectivityManager.shared.flushBufferedSamplesIfNeeded()
             WatchSideConnectivityManager.shared.sendCurrentState()
             processPendingCommands()
+            SleepAutoStartMonitor.shared.activate()
         }
     }
 
@@ -41,6 +42,7 @@ final class ExtensionDelegate: NSObject, WKExtensionDelegate {
                 WatchSideConnectivityManager.shared.sendConnectionState(connectionState)
                 wcTask.setTaskCompletedWithSnapshot(false)
             case let appTask as WKApplicationRefreshBackgroundTask:
+                SleepAutoStartMonitor.shared.activate()
                 appTask.setTaskCompletedWithSnapshot(false)
             case let snapshotTask as WKSnapshotRefreshBackgroundTask:
                 snapshotTask.setTaskCompleted(restoredDefaultState: true, estimatedSnapshotExpiration: .distantFuture, userInfo: nil)

@@ -481,6 +481,7 @@ private extension REMState {
         case .rem: return "REM phase"
         case .deep: return "Deep phase"
         case .light: return "Light phase"
+        case .awake: return "Awake"
         }
     }
 
@@ -489,6 +490,7 @@ private extension REMState {
         case .rem: return "Dream-heavy sleep"
         case .deep: return "Restoring energy"
         case .light: return "Transitioning"
+        case .awake: return "Movement detected"
         }
     }
 
@@ -497,6 +499,7 @@ private extension REMState {
         case .rem: return .purple
         case .deep: return .blue
         case .light: return .teal
+        case .awake: return .orange
         }
     }
 }

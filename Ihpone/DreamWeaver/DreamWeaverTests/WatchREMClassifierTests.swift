@@ -177,4 +177,146 @@ struct WatchREMClassifierTests {
         #expect(classifier.windows[0].id == open.id)
         #expect(classifier.windows[0].end == reference.addingTimeInterval(180))
     }
+
+    // MARK: - Personalised baseline
+
+    @Test("A fresh baseline falls back to the population thresholds")
+    func baselineFallsBackBeforeWarmUp() {
+        let baseline = SleepBaseline()
+        #expect(!baseline.isWarmedUp)
+        #expect(baseline.deepSleepMaxHeartRate == REMClassifier.deepSleepMaxHeartRate)
+        #expect(baseline.minimumREMHeartRateVariability == REMClassifier.minimumREMHeartRateVariability)
+    }
+
+    @Test("The baseline tracks down toward the night's resting floor")
+    func baselineDescendsTowardResting() {
+        var baseline = SleepBaseline(restingHeartRate: 70, typicalHRV: 45)
+        for _ in 0..<200 {
+            baseline.ingest(heartRate: 48, heartRateVariability: 60)
+        }
+        #expect(baseline.isWarmedUp)
+        #expect(baseline.restingHeartRate < 55)
+    }
+
+    @Test("A single spike barely moves the baseline")
+    func baselineResistsSpikes() {
+        var baseline = SleepBaseline(restingHeartRate: 55, typicalHRV: 45)
+        let before = baseline.restingHeartRate
+        baseline.ingest(heartRate: 160, heartRateVariability: 20)
+        #expect(baseline.restingHeartRate - before < 0.5)
+    }
+
+    @Test("An athlete's low resting rate no longer reads as permanent deep sleep")
+    func lowRestingSleeperStillReachesREM() {
+        let athlete = SleepBaseline(restingHeartRate: 42, typicalHRV: 60, sampleCount: 200)
+        let state = REMClassifier.classify(heartRate: 46,
+                                           heartRateVariability: 55,
+                                           movement: 0.05,
+                                           baseline: athlete)
+        #expect(state == .rem)
+    }
+
+    @Test("A high resting sleeper can still reach deep sleep")
+    func highRestingSleeperReachesDeep() {
+        let baseline = SleepBaseline(restingHeartRate: 72, typicalHRV: 40, sampleCount: 200)
+        let state = REMClassifier.classify(heartRate: 66,
+                                           heartRateVariability: 45,
+                                           movement: 0.05,
+                                           baseline: baseline)
+        #expect(state == .deep)
+    }
+
+    // MARK: - Movement
+
+    @Test("Sustained movement reports awake")
+    func movementReportsAwake() {
+        let state = REMClassifier.classify(heartRate: 62,
+                                           heartRateVariability: 55,
+                                           movement: 0.9,
+                                           baseline: nil)
+        #expect(state == .awake)
+    }
+
+    @Test("REM requires the muscle atonia that comes with a still wrist")
+    func movementVetoesREM() {
+        let restless = REMClassifier.classify(heartRate: 62,
+                                              heartRateVariability: 55,
+                                              movement: 0.4,
+                                              baseline: nil)
+        let still = REMClassifier.classify(heartRate: 62,
+                                           heartRateVariability: 55,
+                                           movement: 0.05,
+                                           baseline: nil)
+        #expect(restless == .light)
+        #expect(still == .rem)
+    }
+
+    @Test("The legacy entry point never reports awake")
+    func legacyClassifyNeverReportsAwake() {
+        for heartRate in stride(from: 30.0, through: 200.0, by: 5.0) {
+            for hrv in stride(from: 0.0, through: 120.0, by: 20.0) {
+                #expect(REMClassifier.classify(heartRate: heartRate, heartRateVariability: hrv) != .awake)
+            }
+        }
+    }
+
+    // MARK: - Smoothing
+
+    @Test("The overnight configuration smooths and adapts")
+    func overnightConfiguration() {
+        #expect(REMClassifier.Configuration.overnight.smoothingDepth > 1)
+        #expect(REMClassifier.Configuration.overnight.adaptiveBaseline)
+        #expect(REMClassifier.Configuration.overnight.movementAware)
+        #expect(REMClassifier.Configuration.legacy.smoothingDepth == 1)
+    }
+
+    @Test("A one-second blip cannot flip the reported stage when smoothing")
+    func smoothingRejectsBlips() {
+        var classifier = REMClassifier(configuration: .overnight)
+        // Establish a steady deep-sleep run.
+        for second in 0..<40 {
+            classifier.ingest(heartRate: 44,
+                              heartRateVariability: 55,
+                              movement: 0.02,
+                              timestamp: reference.addingTimeInterval(TimeInterval(second)))
+        }
+        let settled = classifier.state
+        classifier.ingest(heartRate: 62,
+                          heartRateVariability: 55,
+                          movement: 0.02,
+                          timestamp: reference.addingTimeInterval(41))
+
+        #expect(classifier.state == settled)
+    }
+
+    @Test("A sustained change does move the reported stage when smoothing")
+    func smoothingAcceptsSustainedChange() {
+        var classifier = REMClassifier(configuration: .overnight)
+        for second in 0..<40 {
+            classifier.ingest(heartRate: 44,
+                              heartRateVariability: 55,
+                              movement: 0.02,
+                              timestamp: reference.addingTimeInterval(TimeInterval(second)))
+        }
+        for second in 40..<80 {
+            classifier.ingest(heartRate: 66,
+                              heartRateVariability: 60,
+                              movement: 0.02,
+                              timestamp: reference.addingTimeInterval(TimeInterval(second)))
+        }
+
+        #expect(classifier.state != .deep)
+    }
+
+    @Test("Smoothing never invents a stage that was not observed")
+    func smoothingIsConservative() {
+        var classifier = REMClassifier(configuration: .overnight)
+        for second in 0..<120 {
+            let state = classifier.ingest(heartRate: Double.random(in: 40...90),
+                                          heartRateVariability: Double.random(in: 10...90),
+                                          movement: Double.random(in: 0...1),
+                                          timestamp: reference.addingTimeInterval(TimeInterval(second)))
+            #expect([REMState.light, .deep, .rem, .awake].contains(state))
+        }
+    }
 }

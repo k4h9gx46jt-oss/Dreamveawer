@@ -483,24 +483,25 @@ private extension PhoneWatchConnectivityManager {
             let endDate = Date(timeIntervalSince1970: endInterval)
             finalizeREMWindow(until: endDate)
             var decodedSamples: [BiosignalDataPoint] = []
-            if let list = payload["samples"] as? [[String: Double]] {
+            if let list = payload["samples"] as? [[String: Any]] {
                 decodedSamples = list.compactMap { dict in
-                    guard let timestamp = dict["timestamp"],
-                          let heartRate = dict["heartRate"],
-                          let hrv = dict["hrv"] else { return nil }
+                    guard let timestamp = dict["timestamp"] as? Double,
+                          let heartRate = dict["heartRate"] as? Double,
+                          let hrv = dict["hrv"] as? Double else { return nil }
                     return BiosignalDataPoint(
                         timestamp: Date(timeIntervalSince1970: timestamp),
                         heartRate: heartRate,
                         hrv: hrv,
-                        movement: 0,
-                        spo2: dict["spo2"] ?? 0,
-                        respiratoryRate: dict["respiratoryRate"] ?? 0,
-                        ecgConfidence: dict["ecgConfidence"] ?? 0,
-                        hypertensionRisk: dict["hypertensionRisk"] ?? 0,
-                        wristTemperatureDelta: dict["temperatureDelta"] ?? 0,
-                        sleepScore: dict["sleepScore"] ?? 0,
-                        noiseExposure: dict["noiseExposure"] ?? 0,
-                        apneaRisk: dict["apneaRisk"] ?? 0
+                        movement: dict["movement"] as? Double ?? 0,
+                        spo2: dict["spo2"] as? Double ?? 0,
+                        respiratoryRate: dict["respiratoryRate"] as? Double ?? 0,
+                        ecgConfidence: dict["ecgConfidence"] as? Double ?? 0,
+                        hypertensionRisk: dict["hypertensionRisk"] as? Double ?? 0,
+                        wristTemperatureDelta: dict["temperatureDelta"] as? Double ?? 0,
+                        sleepScore: dict["sleepScore"] as? Double ?? 0,
+                        noiseExposure: dict["noiseExposure"] as? Double ?? 0,
+                        apneaRisk: dict["apneaRisk"] as? Double ?? 0,
+                        sleepStage: (dict["remState"] as? String).flatMap(REMState.init(rawValue:))
                     )
                 }
                 sleepSamples = normalizedLiveSamples(decodedSamples)
@@ -781,7 +782,7 @@ private extension PhoneWatchConnectivityManager {
             timestamp: Date(timeIntervalSince1970: timestamp),
             heartRate: heartRate,
             hrv: hrv,
-            movement: 0,
+            movement: payload["movement"] as? Double ?? 0,
             spo2: payload["spo2"] as? Double ?? liveSpO2,
             respiratoryRate: payload["respiratoryRate"] as? Double ?? liveRespiratoryRate,
             ecgConfidence: payload["ecgConfidence"] as? Double ?? liveECGConfidence,
@@ -789,7 +790,8 @@ private extension PhoneWatchConnectivityManager {
             wristTemperatureDelta: payload["temperatureDelta"] as? Double ?? liveTemperatureDelta,
             sleepScore: payload["sleepScore"] as? Double ?? liveSleepScore,
             noiseExposure: payload["noiseExposure"] as? Double ?? liveNoiseExposure,
-            apneaRisk: payload["apneaRisk"] as? Double ?? liveApneaRisk
+            apneaRisk: payload["apneaRisk"] as? Double ?? liveApneaRisk,
+            sleepStage: (payload["remState"] as? String).flatMap(REMState.init(rawValue:))
         )
     }
 
