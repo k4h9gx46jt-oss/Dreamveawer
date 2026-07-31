@@ -7,6 +7,14 @@ import UIKit
 
 @MainActor
 final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
+    enum PhoneSessionState: Equatable {
+        case idle
+        case starting
+        case running
+        case stopping
+        case failed
+    }
+
     static let shared = PhoneWatchConnectivityManager()
 
     @Published var isWatchReachable: Bool = false
@@ -26,6 +34,11 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     @Published var remoteSessionStart: Date?
     @Published var remoteSessionEndedAt: Date?
     @Published var remoteSessionId: UUID?
+    @Published private(set) var controlSessionStart: Date?
+    @Published private(set) var controlSessionEndedAt: Date?
+    @Published private(set) var controlSessionId: UUID?
+    @Published private(set) var phoneSessionState: PhoneSessionState = .idle
+    @Published private(set) var phoneSessionError: String?
 
     private var session: WCSession?
     private var currentREMStart: Date?
@@ -42,6 +55,15 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     private var lastCatchupRequestDate: Date?
     private let sampleCatchupThreshold: TimeInterval = 6
     private let sampleCatchupCooldown: TimeInterval = 20
+    private var controlRetryTimer: Timer?
+    private var pendingControlCommand: PendingControlCommand?
+    private let controlRetryInterval: TimeInterval = 2
+    private let maxControlRetryCount = 8
+
+    private enum PendingControlCommand {
+        case start(UUID, Int)
+        case stop(UUID, Int)
+    }
 
     private override init() {
         super.init()
@@ -54,31 +76,111 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
         }
     }
 
+    var hasActiveRemoteSession: Bool {
+        remoteSessionStart != nil && remoteSessionEndedAt == nil
+    }
+
+    var hasActiveControlSession: Bool {
+        controlSessionStart != nil && controlSessionEndedAt == nil
+    }
+
+    var hasAnyActiveSession: Bool {
+        hasActiveControlSession || hasActiveRemoteSession
+    }
+
+    var isAwaitingWatchStart: Bool {
+        phoneSessionState == .starting
+    }
+
+    var isAwaitingWatchStop: Bool {
+        phoneSessionState == .stopping
+    }
+
+    func requestPhoneSessionStart() {
+        guard phoneSessionState != .starting, phoneSessionState != .running else { return }
+        let sessionId = controlSessionId ?? UUID()
+        let startDate = Date()
+        phoneSessionError = nil
+        phoneSessionState = .starting
+        controlSessionId = sessionId
+        controlSessionStart = startDate
+        controlSessionEndedAt = nil
+        wantsLiveMirroring = true
+        resetLiveMetrics()
+        requestConnectionPing()
+        startSleepSession(id: sessionId)
+        syncControlStateToWatch()
+        scheduleControlRetry(.start(sessionId, 0))
+        requestWatchStatusSnapshot(force: true)
+    }
+
+    func requestPhoneSessionStop() {
+        guard let sessionId = activeSessionId else { return }
+        phoneSessionError = nil
+        phoneSessionState = .stopping
+        controlSessionId = sessionId
+        controlSessionEndedAt = Date()
+        controlSessionStart = nil
+        stopSleepSession(id: sessionId)
+        syncControlStateToWatch()
+        scheduleControlRetry(.stop(sessionId, 0))
+        requestWatchStatusSnapshot(force: true)
+    }
+
+    func clearPhoneSessionError() {
+        phoneSessionError = nil
+        if phoneSessionState == .failed {
+            phoneSessionState = .idle
+        }
+    }
+
     func startMirroringLiveData() {
         wantsLiveMirroring = true
         resetLiveMetrics()
         requestConnectionPing()
-        startMockStreamIfNeeded()
+        if !isWatchReachable {
+            startMockStreamIfNeeded()
+        }
     }
 
     func stopMirroringLiveData() {
         wantsLiveMirroring = false
         stopMockStream()
         resetLiveMetrics()
+        clearPendingControlRetry()
+    }
+
+    func finalizePhoneSessionStateIfNeeded() {
+        if phoneSessionState == .stopping {
+            phoneSessionState = .idle
+        }
+        if !hasAnyActiveSession, phoneSessionState == .running {
+            phoneSessionState = .idle
+        }
     }
 
     func acknowledgeLocalStop(sessionId: UUID, endedAt: Date) {
-        remoteSessionId = sessionId
-        remoteSessionEndedAt = endedAt
-        remoteSessionStart = nil
+        controlSessionId = sessionId
+        controlSessionEndedAt = endedAt
+        controlSessionStart = nil
+        syncControlStateToWatch()
+        scheduleControlRetry(.stop(sessionId, 0))
+    }
+
+    func acknowledgeLocalStart(sessionId: UUID, startedAt: Date) {
+        controlSessionId = sessionId
+        controlSessionStart = startedAt
+        controlSessionEndedAt = nil
+        syncControlStateToWatch()
+        scheduleControlRetry(.start(sessionId, 0))
     }
 
     func startSleepSession(id: UUID) {
-        sendCommandToWatch("startSleep", extras: ["sessionId": id.uuidString])
+        sendCommandToWatch("startSleep", extras: ["sessionId": id.uuidString], expectsStatusReply: true)
     }
 
     func stopSleepSession(id: UUID) {
-        sendCommandToWatch("stopSleep", extras: ["sessionId": id.uuidString])
+        sendCommandToWatch("stopSleep", extras: ["sessionId": id.uuidString], expectsStatusReply: true)
     }
 
     func attemptReconnect() {
@@ -200,18 +302,39 @@ private extension PhoneWatchConnectivityManager {
         }
     }
 
-    func sendCommandToWatch(_ command: String, extras: [String: Any] = [:]) {
+    func sendCommandToWatch(_ command: String, extras: [String: Any] = [:], expectsStatusReply: Bool = false) {
         guard let session else { return }
         var payload = extras
         payload["command"] = command
         payload["timestamp"] = Date().timeIntervalSince1970
         payload["commandToken"] = UUID().uuidString
         if session.isReachable {
-            session.sendMessage(payload, replyHandler: nil) { error in
-                print("Watch command send failed: \(error.localizedDescription)")
+            if expectsStatusReply {
+                session.sendMessage(payload) { [weak self] response in
+                    Task { @MainActor in
+                        self?.handleStatusSnapshot(response)
+                    }
+                } errorHandler: { error in
+                    print("Watch command send failed: \(error.localizedDescription)")
+                }
+            } else {
+                session.sendMessage(payload, replyHandler: nil) { error in
+                    print("Watch command send failed: \(error.localizedDescription)")
+                }
             }
         }
         enqueueCommandPayload(payload, using: session)
+    }
+
+    func syncControlStateToWatch() {
+        guard let session, session.activationState == .activated else { return }
+        let payload = controlStatePayload()
+        do {
+            try session.updateApplicationContext(payload)
+        } catch {
+            print("Failed to sync control state to watch: \(error.localizedDescription)")
+        }
+        session.transferUserInfo(payload)
     }
 
     func requestConnectionPing() {
@@ -235,6 +358,20 @@ private extension PhoneWatchConnectivityManager {
         remWindows = []
         currentREMStart = nil
         lastSampleTimestamp = nil
+    }
+
+    func controlStatePayload() -> [String: Any] {
+        let tracking = hasActiveControlSession
+        var payload: [String: Any] = [
+            "controlStateSync": true,
+            "tracking": tracking,
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        if tracking {
+            payload["sessionId"] = controlSessionId?.uuidString ?? ""
+            payload["start"] = controlSessionStart?.timeIntervalSince1970 ?? 0
+        }
+        return payload
     }
 
     func enqueueCommandPayload(_ payload: [String: Any], using session: WCSession) {
@@ -314,11 +451,11 @@ private extension PhoneWatchConnectivityManager {
     }
 
       func statusSnapshotPayload() -> [String: Any] {
-          let tracking = remoteSessionStart != nil && remoteSessionEndedAt == nil
+          let tracking = hasAnyActiveSession
           var payload: [String: Any] = ["tracking": tracking]
           if tracking {
-              payload["sessionId"] = remoteSessionId?.uuidString ?? ""
-              payload["start"] = remoteSessionStart?.timeIntervalSince1970 ?? 0
+              payload["sessionId"] = activeSessionId?.uuidString ?? ""
+              payload["start"] = activeSessionStart?.timeIntervalSince1970 ?? 0
           }
           return payload
       }
@@ -334,6 +471,11 @@ private extension PhoneWatchConnectivityManager {
                 remoteSessionId = uuid
                 remoteSessionStart = Date(timeIntervalSince1970: startInterval)
                 remoteSessionEndedAt = nil
+                if uuid == controlSessionId {
+                    phoneSessionState = .running
+                    phoneSessionError = nil
+                    clearPendingControlRetry()
+                }
             }
             liveSleepStage = "Light"
         case "sleepEnd":
@@ -381,6 +523,12 @@ private extension PhoneWatchConnectivityManager {
             remoteSessionId = sessionIdentifier
             remoteSessionStart = nil
             remoteSessionEndedAt = endDate
+            if sessionIdentifier == controlSessionId || sessionIdentifier == nil {
+                phoneSessionState = .idle
+                phoneSessionError = nil
+                clearPendingControlRetry()
+                clearControlSession()
+            }
             currentREMStart = nil
             deliverRemoteSessionResult(RemoteSleepSessionResult(sessionId: sessionIdentifier,
                                                                 startedAt: startDate,
@@ -452,15 +600,28 @@ private extension PhoneWatchConnectivityManager {
             if let idString = payload["sessionId"] as? String,
                let uuid = UUID(uuidString: idString) {
                 remoteSessionId = uuid
+                if uuid == controlSessionId {
+                    phoneSessionState = .running
+                    phoneSessionError = nil
+                    clearPendingControlRetry()
+                }
             }
             if let startInterval = payload["start"] as? Double {
                 let startDate = Date(timeIntervalSince1970: startInterval)
                 remoteSessionStart = startDate
                 remoteSessionEndedAt = nil
             }
-        } else if remoteSessionStart != nil && remoteSessionEndedAt == nil {
+        } else if hasActiveRemoteSession {
             remoteSessionStart = nil
             remoteSessionId = nil
+            if let controlSessionId {
+                if case .stop(let pendingId, _) = pendingControlCommand, pendingId == controlSessionId {
+                    phoneSessionState = .idle
+                    phoneSessionError = nil
+                    clearPendingControlRetry()
+                    clearControlSession()
+                }
+            }
         }
         if let session {
             refreshReachability(using: session)
@@ -469,7 +630,7 @@ private extension PhoneWatchConnectivityManager {
     }
 
     func startMockStreamIfNeeded() {
-        guard wantsLiveMirroring, mockSampleTimer == nil else { return }
+        guard wantsLiveMirroring, !isWatchReachable, mockSampleTimer == nil else { return }
         mockSampleGenerator.reset()
         mockSampleTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             self?.emitMockSample()
@@ -482,7 +643,7 @@ private extension PhoneWatchConnectivityManager {
     }
 
     func emitMockSample() {
-        guard wantsLiveMirroring else {
+        guard wantsLiveMirroring, !isWatchReachable else {
             stopMockStream()
             return
         }
@@ -504,7 +665,7 @@ private extension PhoneWatchConnectivityManager {
 
     func requestSampleCatchupIfNeeded(reason: String) {
         guard let session, session.isReachable else { return }
-        let tracking = remoteSessionStart != nil && remoteSessionEndedAt == nil
+        let tracking = hasAnyActiveSession
         guard tracking || wantsLiveMirroring else { return }
         let now = Date()
         if let last = lastSampleTimestamp, now.timeIntervalSince(last) < sampleCatchupThreshold {
@@ -516,6 +677,100 @@ private extension PhoneWatchConnectivityManager {
         lastCatchupRequestDate = now
         let since = lastSampleTimestamp?.timeIntervalSince1970 ?? 0
         sendCommandToWatch("samplesRequest", extras: ["since": since, "reason": reason])
+    }
+
+    private var activeSessionId: UUID? {
+        if hasActiveControlSession {
+            return controlSessionId
+        }
+        return remoteSessionId
+    }
+
+    private var activeSessionStart: Date? {
+        if hasActiveControlSession {
+            return controlSessionStart
+        }
+        return remoteSessionStart
+    }
+
+    private func scheduleControlRetry(_ command: PendingControlCommand) {
+        pendingControlCommand = command
+        controlRetryTimer?.invalidate()
+        controlRetryTimer = Timer.scheduledTimer(withTimeInterval: controlRetryInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.performPendingControlRetry()
+            }
+        }
+    }
+
+    private func clearPendingControlRetry() {
+        pendingControlCommand = nil
+        controlRetryTimer?.invalidate()
+        controlRetryTimer = nil
+    }
+
+    private func clearControlSession() {
+        controlSessionId = nil
+        controlSessionStart = nil
+        controlSessionEndedAt = nil
+    }
+
+    private func performPendingControlRetry() {
+        guard let pendingCommand = pendingControlCommand else {
+            clearPendingControlRetry()
+            return
+        }
+
+        switch pendingCommand {
+        case let .start(sessionId, attempt):
+            guard hasActiveControlSession, controlSessionId == sessionId else {
+                clearPendingControlRetry()
+                return
+            }
+            if remoteSessionId == sessionId && hasActiveRemoteSession {
+                phoneSessionState = .running
+                clearPendingControlRetry()
+                return
+            }
+            if attempt >= maxControlRetryCount {
+                phoneSessionState = .failed
+                phoneSessionError = "Apple Watch did not confirm Dream Mode start."
+                clearControlSession()
+                wantsLiveMirroring = false
+                stopMockStream()
+                resetLiveMetrics()
+                clearPendingControlRetry()
+                return
+            }
+            startSleepSession(id: sessionId)
+            syncControlStateToWatch()
+            requestWatchStatusSnapshot(force: true)
+            pendingControlCommand = .start(sessionId, attempt + 1)
+
+        case let .stop(sessionId, attempt):
+            guard controlSessionId == sessionId else {
+                clearPendingControlRetry()
+                return
+            }
+            let watchStillReportsTracking = remoteSessionId == sessionId && hasActiveRemoteSession
+            if !watchStillReportsTracking {
+                phoneSessionState = .idle
+                phoneSessionError = nil
+                clearControlSession()
+                clearPendingControlRetry()
+                return
+            }
+            if attempt >= maxControlRetryCount {
+                phoneSessionState = .failed
+                phoneSessionError = "Apple Watch did not confirm Dream Mode stop."
+                clearPendingControlRetry()
+                return
+            }
+            stopSleepSession(id: sessionId)
+            syncControlStateToWatch()
+            requestWatchStatusSnapshot(force: true)
+            pendingControlCommand = .stop(sessionId, attempt + 1)
+        }
     }
 
     func decodeSample(from payload: [String: Any]) -> BiosignalDataPoint? {

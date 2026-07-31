@@ -72,14 +72,34 @@ final class SleepDataStore: ObservableObject {
 }
 
 struct SleepSession {
-    let id = UUID()
-    var startedAt: Date = Date()
+    let id: UUID
+    var startedAt: Date
     var endedAt: Date?
-    var biosignals: [BiosignalDataPoint] = []
-    var averageHeartRate: Double = 60
-    var hrvAverage: Double = 52
-    var ambientNoiseAvg: Double = 0.2
+    var biosignals: [BiosignalDataPoint]
+    var averageHeartRate: Double
+    var hrvAverage: Double
+    var ambientNoiseAvg: Double
     var remProfile: REMDreamProfile?
+
+    init(
+        id: UUID = UUID(),
+        startedAt: Date = Date(),
+        endedAt: Date? = nil,
+        biosignals: [BiosignalDataPoint] = [],
+        averageHeartRate: Double = 60,
+        hrvAverage: Double = 52,
+        ambientNoiseAvg: Double = 0.2,
+        remProfile: REMDreamProfile? = nil
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.biosignals = biosignals
+        self.averageHeartRate = averageHeartRate
+        self.hrvAverage = hrvAverage
+        self.ambientNoiseAvg = ambientNoiseAvg
+        self.remProfile = remProfile
+    }
 
     mutating func finish(on date: Date = Date()) {
         endedAt = date

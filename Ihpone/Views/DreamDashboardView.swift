@@ -75,12 +75,12 @@ struct DreamDashboardView: View {
                     HStack(spacing: 8) {
                         Image(systemName: isRemoteSessionActive ? "waveform.path.ecg" : "bed.double.fill")
                             .font(.title2)
-                        Text(isRemoteSessionActive ? "Dreaming" : "Start Dream Mode")
+                        Text(isRemoteSessionActive ? "Dreaming" : "Open Dream Monitor")
                             .font(.title2.bold())
                     }
                     .foregroundStyle(.white)
 
-                    Text(isRemoteSessionActive ? "Session running on your Apple Watch" : "Track your sleep and visualize\nyour dreams")
+                    Text(isRemoteSessionActive ? "Session running on your Apple Watch" : "Start Dream Mode on Apple Watch, then monitor it here")
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.9))
                         .multilineTextAlignment(.leading)

@@ -275,6 +275,12 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
 
     private nonisolated func routeIncomingCommand(_ payload: [String: Any], replyHandler: (([String: Any]) -> Void)? = nil) {
         Task { @MainActor in
+            if payload["controlStateSync"] as? Bool == true {
+                reconcilePhoneControlState(payload)
+                replyHandler?([:])
+                return
+            }
+
             guard let command = payload["command"] as? String else { return }
             guard shouldProcessCommand(payload) else { return }
             lastCommand = command
@@ -297,6 +303,7 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
 
             if let delegate = ExtensionDelegate.shared {
                 delegate.handleRemoteCommandPayload(payload)
+                replyHandler?(currentStatusSnapshot())
                 return
             }
 
@@ -305,6 +312,35 @@ extension WatchSideConnectivityManager: WCSessionDelegate {
                 scheduleBackgroundWake()
             }
         }
+    }
+
+    @MainActor
+    private func reconcilePhoneControlState(_ payload: [String: Any]) {
+        let shouldTrack = payload["tracking"] as? Bool ?? false
+        if shouldTrack {
+            guard let idString = payload["sessionId"] as? String,
+                  let sessionId = UUID(uuidString: idString),
+                  let startInterval = payload["start"] as? Double,
+                  startInterval > 0 else {
+                return
+            }
+            let startDate = Date(timeIntervalSince1970: startInterval)
+            if WorkoutManager.shared.activeSessionId == sessionId {
+                sendConnectionState(.tracking)
+                return
+            }
+            if WorkoutManager.shared.isTracking {
+                WorkoutManager.shared.handleRemoteStopSync()
+            }
+            WorkoutManager.shared.resumeIfNeeded(sessionId: sessionId, startDate: startDate)
+            sendConnectionState(.tracking)
+            return
+        }
+
+        if WorkoutManager.shared.isTracking {
+            WorkoutManager.shared.handleRemoteStopSync()
+        }
+        sendConnectionState(.ready)
     }
 
     private func shouldProcessCommand(_ payload: [String: Any]) -> Bool {

@@ -13,9 +13,11 @@ struct ContentView: View {
                 DreamDashboardView(
                     lastDream: dataStore.dreams.first,
                     history: dataStore.dreams,
-                    startTapped: { showingTracking = true },
+                    startTapped: {
+                        showingTracking = true
+                    },
                     dreamTapped: { dream in selectedDream = dream },
-                    isRemoteSessionActive: connectivity.remoteSessionStart != nil && connectivity.remoteSessionEndedAt == nil
+                    isRemoteSessionActive: connectivity.hasAnyActiveSession
                 )
             }
             .padding(.top, 8)

@@ -3,6 +3,7 @@ import SwiftUI
 struct WatchContentView: View {
     @EnvironmentObject private var workoutManager: WorkoutManager
     @EnvironmentObject private var connectivity: WatchSideConnectivityManager
+    private let phoneSyncTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
@@ -20,15 +21,7 @@ struct WatchContentView: View {
         .onAppear {
             workoutManager.refreshElapsed()
             broadcastCurrentState()
-            connectivity.requestStatusSnapshot { snapshot in
-                if snapshot.isTracking,
-                   let sessionId = snapshot.sessionId,
-                   let startDate = snapshot.startDate {
-                    workoutManager.resumeIfNeeded(sessionId: sessionId, startDate: startDate)
-                } else if workoutManager.isTracking {
-                    workoutManager.handleRemoteStopSync()
-                }
-            }
+            synchronizeWithPhone()
         }
         .onChange(of: workoutManager.isTracking) { _, tracking in
             broadcastCurrentState()
@@ -36,6 +29,21 @@ struct WatchContentView: View {
         }
         .onChange(of: workoutManager.sessionStartDate) { _, _ in
             workoutManager.refreshElapsed()
+        }
+        .onReceive(phoneSyncTimer) { _ in
+            synchronizeWithPhone()
+        }
+    }
+
+    private func synchronizeWithPhone() {
+        connectivity.requestStatusSnapshot { snapshot in
+            if snapshot.isTracking,
+               let sessionId = snapshot.sessionId,
+               let startDate = snapshot.startDate {
+                workoutManager.resumeIfNeeded(sessionId: sessionId, startDate: startDate)
+            } else if workoutManager.isTracking {
+                workoutManager.handleRemoteStopSync()
+            }
         }
     }
 

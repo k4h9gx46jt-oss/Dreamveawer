@@ -17,6 +17,7 @@ struct SleepTrackingView: View {
     @State private var mediaError: String?
     @State private var dreamVideoResult: DreamVideoResult?
     @State private var selectedChartPage = 0
+    @State private var showingStartOnWatchAlert = false
 
     private let formatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
@@ -40,15 +41,16 @@ struct SleepTrackingView: View {
                 }
 
                 Button(action: toggleTracking) {
-                    Text(isTracking ? "Stop Tracking" : "Start Dream Mode")
+                    Text(trackingButtonTitle)
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(isTracking ? Color.red : Color.purple)
+                        .background(trackingButtonColor)
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 20))
                         .padding(.horizontal)
                 }
+                .disabled(isAwaitingSessionTransition)
             }
             .padding(.vertical, 24)
             .padding(.horizontal)
@@ -61,9 +63,28 @@ struct SleepTrackingView: View {
         } message: {
             Text(mediaError ?? "")
         }
+        .alert("Start on Apple Watch", isPresented: $showingStartOnWatchAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Dream Mode can only be started from the Apple Watch. Use this screen to monitor an active watch session.")
+        }
+        .alert("Dream session issue", isPresented: .init(get: { connectivity.phoneSessionError != nil }, set: { visible in
+            if !visible {
+                connectivity.clearPhoneSessionError()
+            }
+        })) {
+            Button("OK", role: .cancel) {
+                connectivity.clearPhoneSessionError()
+            }
+        } message: {
+            Text(connectivity.phoneSessionError ?? "")
+        }
         .onAppear {
-            if !isTracking, let start = connectivity.remoteSessionStart {
-                startTracking(triggeredByRemote: true, startDate: start)
+            if !isTracking,
+               let start = connectivity.remoteSessionStart {
+                let sessionId = connectivity.remoteSessionId
+                let isPhoneControlled = sessionId != nil && sessionId == connectivity.controlSessionId
+                activateTrackingSession(triggeredByRemote: !isPhoneControlled, startDate: start, sessionId: sessionId)
             }
             connectivity.requestWatchStatusSnapshot(force: true)
         }
@@ -76,14 +97,16 @@ struct SleepTrackingView: View {
         .onReceive(connectivity.$remoteSessionStart) { start in
             guard let start else { return }
             if !isTracking {
-                startTracking(triggeredByRemote: true, startDate: start)
+                let sessionId = connectivity.remoteSessionId
+                let isPhoneControlled = sessionId != nil && sessionId == connectivity.controlSessionId
+                activateTrackingSession(triggeredByRemote: !isPhoneControlled, startDate: start, sessionId: sessionId)
             }
         }
         .onReceive(connectivity.$remoteSessionEndedAt) { end in
             guard let end, isTracking else { return }
-            let matchesActiveSession = connectivity.remoteSessionId == session.id
+            let matchesActiveSession = connectivity.remoteSessionId == session.id || connectivity.controlSessionId == session.id
             guard remoteControlled || matchesActiveSession else { return }
-            stopTracking(triggeredByRemote: true, endDate: end)
+            finalizeTrackingStop(endDate: end)
         }
         .confirmationDialog("Apple Watch Connection", isPresented: $showingConnectionHelp, titleVisibility: .visible) {
             Button("Retry Connection") {
@@ -123,45 +146,54 @@ struct SleepTrackingView: View {
 
     private func toggleTracking() {
         if isTracking {
-            stopTracking()
+            requestStopTracking()
         } else {
-            startTracking()
+            requestStartTracking()
         }
     }
 
-    private func startTracking(triggeredByRemote: Bool = false, startDate: Date = Date()) {
+    private func requestStartTracking() {
+        guard !isTracking else { return }
+        showingStartOnWatchAlert = true
+    }
+
+    private func requestStopTracking() {
+        guard isTracking, !isAwaitingSessionTransition else { return }
+        connectivity.requestPhoneSessionStop()
+    }
+
+    private func activateTrackingSession(triggeredByRemote: Bool, startDate: Date, sessionId: UUID?) {
         guard !isTracking else { return }
         isTracking = true
         remoteControlled = triggeredByRemote
-        session = SleepSession(startedAt: startDate)
+        session = SleepSession(id: sessionId ?? UUID(), startedAt: startDate)
         elapsed = Date().timeIntervalSince(startDate)
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             elapsed = Date().timeIntervalSince(session.startedAt)
         }
         connectivity.startMirroringLiveData()
-        if !triggeredByRemote {
-            connectivity.startSleepSession(id: session.id)
-        }
     }
 
-    private func stopTracking(triggeredByRemote: Bool = false, endDate: Date = Date()) {
+    private func finalizeTrackingStop(endDate: Date = Date()) {
         guard isTracking else { return }
         isTracking = false
         remoteControlled = false
         timer?.invalidate()
         timer = nil
         let samples = connectivity.sleepSamples
-        if !triggeredByRemote {
-            connectivity.stopMirroringLiveData()
-            connectivity.stopSleepSession(id: session.id)
-            connectivity.acknowledgeLocalStop(sessionId: session.id, endedAt: endDate)
-        }
+        connectivity.stopMirroringLiveData()
+        connectivity.finalizePhoneSessionStateIfNeeded()
         var completedSession = session
         completedSession.biosignals = samples
         completedSession.recalculateAverages()
         completedSession.finish(on: endDate)
         completedSession.analyzeREMProfile()
+        guard !completedSession.biosignals.isEmpty else {
+            mediaStatus = .failed
+            mediaError = "No Apple Watch sleep data was received for this session."
+            return
+        }
         Task {
             await MainActor.run {
                 isProcessingAI = true
@@ -182,6 +214,27 @@ struct SleepTrackingView: View {
 }
 
 private extension SleepTrackingView {
+    var isAwaitingSessionTransition: Bool {
+        connectivity.isAwaitingWatchStart || connectivity.isAwaitingWatchStop
+    }
+
+    var trackingButtonTitle: String {
+        if connectivity.isAwaitingWatchStart {
+            return "Starting on Apple Watch..."
+        }
+        if connectivity.isAwaitingWatchStop {
+            return "Stopping on Apple Watch..."
+        }
+        return isTracking ? "Stop Tracking" : "Start on Apple Watch"
+    }
+
+    var trackingButtonColor: Color {
+        if connectivity.isAwaitingWatchStop {
+            return .orange
+        }
+        return isTracking ? .red : .purple
+    }
+
     var connectionStatusCard: some View {
         RoundedRectangle(cornerRadius: 24)
             .fill(.ultraThinMaterial)
@@ -192,7 +245,7 @@ private extension SleepTrackingView {
                         .animation(.easeInOut, value: connectivity.isWatchReachable)
                     Text(formatter.string(from: elapsed) ?? "00:00:00")
                         .font(.system(size: 48, weight: .semibold, design: .rounded))
-                    Text(connectivity.isWatchReachable ? "Live connection ready" : "Tap to test the connection or open the Watch app to finish setup.")
+                    Text(connectionStatusMessage)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -207,6 +260,16 @@ private extension SleepTrackingView {
                 connectivity.attemptReconnect()
                 showingConnectionHelp = true
             }
+    }
+
+    var connectionStatusMessage: String {
+        if connectivity.isAwaitingWatchStart {
+            return "Waiting for Apple Watch to confirm Dream Mode start."
+        }
+        if connectivity.isAwaitingWatchStop {
+            return "Waiting for Apple Watch to confirm Dream Mode stop."
+        }
+        return connectivity.isWatchReachable ? "Start Dream Mode on Apple Watch to monitor it here." : "Tap to test the connection or open the Watch app to finish setup."
     }
 
     var renderStatusBanner: some View {
