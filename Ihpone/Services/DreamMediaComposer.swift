@@ -249,6 +249,12 @@ private struct DreamScoreProfile {
         var drums: Float
     }
 
+    /// One melodic event: a scale degree (or a rest) and its length in sixteenth steps.
+    struct MelodyNote {
+        let degree: Int?
+        let steps: Int
+    }
+
     let genre: DreamGenre
     let tempo: Float
     let beatsPerBar: Int
@@ -256,8 +262,9 @@ private struct DreamScoreProfile {
     let tonicHz: Float
     let scale: [Float]
     let progression: [Int]
-    /// Scale degrees on an eighth-note grid, `nil` is a rest.
-    let melody: [Int?]
+    /// Consecutive four-bar phrases; the renderer cycles them so the tune does not loop every bar.
+    let melodyPhrases: [[MelodyNote]]
+    let ornamentChance: Float
     /// Chord-tone indices on an eighth-note grid; values ≥ 4 shift up an octave.
     let arpPattern: [Int?]
     /// Scale-step offsets from the chord root on a sixteenth grid.
@@ -270,6 +277,7 @@ private struct DreamScoreProfile {
     let arpVoice: ArpVoice
     let percussion: Percussion
     let gains: LayerGains
+    let harmonyAmount: Float
     let drive: Float
     let brightness: Float
     let reverbMix: Float
@@ -294,6 +302,128 @@ private struct DreamScoreProfile {
         let requested = min(max(Float(target), 34), 58)
         let bars = max(4, Int((requested / secondsPerBar).rounded()))
         return TimeInterval(min(Float(bars) * secondsPerBar, 60))
+    }
+
+    /// Every genre has its own melodic character, split into a flowing and an agitated variant.
+    /// Each phrase is exactly four bars (64 sixteenth steps).
+    private static func melodyBank(genre: DreamGenre, agitated: Bool) -> [[MelodyNote]] {
+        func n(_ degree: Int?, _ steps: Int) -> MelodyNote { MelodyNote(degree: degree, steps: steps) }
+
+        switch (genre, agitated) {
+        case (.symphonic, false):
+            return [
+                [n(4, 8), n(6, 4), n(7, 4), n(9, 8), n(7, 4), n(6, 4),
+                 n(4, 6), n(2, 2), n(4, 8), n(2, 8), n(0, 4), n(nil, 4)],
+                [n(7, 4), n(9, 4), n(11, 8), n(9, 6), n(7, 2), n(6, 8),
+                 n(4, 4), n(6, 4), n(7, 8), n(6, 8), n(4, 8)],
+                [n(0, 4), n(2, 4), n(4, 8), n(6, 4), n(7, 4), n(9, 8),
+                 n(7, 4), n(6, 4), n(4, 4), n(2, 4), n(0, 12), n(nil, 4)]
+            ]
+        case (.symphonic, true):
+            return [
+                [n(4, 4), n(7, 2), n(9, 2), n(11, 4), n(9, 4), n(7, 4), n(4, 4), n(6, 4), n(2, 4),
+                 n(4, 2), n(6, 2), n(7, 4), n(11, 8), n(9, 4), n(7, 4), n(4, 8)],
+                [n(9, 4), n(11, 4), n(12, 8), n(11, 4), n(9, 4), n(7, 8),
+                 n(6, 2), n(7, 2), n(9, 4), n(11, 4), n(9, 4), n(7, 4), n(4, 4), n(2, 8)],
+                [n(2, 2), n(4, 2), n(6, 4), n(9, 8), n(7, 4), n(6, 4), n(4, 8),
+                 n(7, 2), n(9, 2), n(11, 4), n(13, 8), n(11, 4), n(9, 4), n(7, 8)]
+            ]
+        case (.chamber, false):
+            return [
+                [n(0, 4), n(2, 2), n(4, 2), n(5, 4), n(4, 4), n(2, 4), n(4, 4), n(6, 8),
+                 n(4, 2), n(5, 2), n(4, 4), n(2, 4), n(0, 4), n(2, 8), n(0, 8)],
+                [n(4, 2), n(5, 2), n(6, 4), n(4, 8), n(2, 2), n(3, 2), n(4, 4), n(6, 8),
+                 n(7, 4), n(6, 2), n(5, 2), n(4, 8), n(2, 4), n(4, 4), n(0, 8)],
+                [n(6, 4), n(4, 4), n(2, 4), n(4, 4), n(5, 2), n(6, 2), n(7, 4), n(6, 8),
+                 n(4, 4), n(2, 4), n(0, 8), n(2, 2), n(4, 2), n(6, 4), n(4, 8)]
+            ]
+        case (.chamber, true):
+            return [
+                [n(0, 2), n(2, 2), n(4, 2), n(6, 2), n(7, 4), n(6, 4),
+                 n(4, 2), n(6, 2), n(7, 4), n(9, 8),
+                 n(7, 2), n(6, 2), n(4, 4), n(2, 4), n(4, 4), n(6, 4), n(4, 4), n(0, 8)],
+                [n(7, 2), n(6, 2), n(7, 4), n(9, 8), n(7, 4), n(4, 4), n(6, 4), n(2, 4),
+                 n(4, 2), n(5, 2), n(6, 2), n(7, 2), n(9, 8), n(7, 4), n(6, 4), n(4, 8)],
+                [n(2, 2), n(4, 2), n(6, 4), n(7, 8), n(9, 4), n(7, 4), n(6, 4), n(4, 4),
+                 n(2, 2), n(4, 2), n(6, 4), n(9, 8), n(7, 4), n(4, 4), n(2, 8)]
+            ]
+        case (.celestial, false):
+            return [
+                [n(0, 8), n(4, 8), n(6, 12), n(7, 4), n(9, 8), n(6, 8), n(4, 12), n(nil, 4)],
+                [n(7, 8), n(9, 8), n(11, 12), n(9, 4), n(7, 8), n(4, 8), n(6, 16)],
+                [n(4, 8), n(6, 8), n(9, 12), n(11, 4), n(13, 8), n(9, 8), n(7, 16)]
+            ]
+        case (.celestial, true):
+            return [
+                [n(4, 4), n(6, 4), n(7, 8), n(9, 4), n(11, 4), n(9, 8),
+                 n(7, 4), n(6, 4), n(4, 8), n(2, 8), n(4, 8)],
+                [n(7, 4), n(9, 4), n(11, 8), n(13, 4), n(11, 4), n(9, 8),
+                 n(7, 4), n(9, 4), n(6, 8), n(4, 16)],
+                [n(6, 4), n(7, 4), n(9, 8), n(11, 8), n(13, 8),
+                 n(11, 4), n(9, 4), n(7, 8), n(6, 8), n(4, 8)]
+            ]
+        case (.cinematic, false):
+            return [
+                [n(0, 4), n(4, 4), n(7, 8), n(6, 4), n(4, 4), n(2, 8),
+                 n(4, 4), n(7, 4), n(9, 8), n(7, 8), n(4, 8)],
+                [n(7, 4), n(6, 4), n(4, 8), n(2, 4), n(4, 4), n(7, 8),
+                 n(9, 4), n(7, 4), n(6, 8), n(4, 8), n(0, 8)],
+                [n(4, 8), n(7, 4), n(9, 4), n(11, 8), n(9, 8),
+                 n(7, 4), n(6, 4), n(4, 8), n(2, 8), n(4, 8)]
+            ]
+        case (.cinematic, true):
+            return [
+                [n(0, 3), n(0, 3), n(4, 2), n(7, 4), n(6, 4),
+                 n(4, 3), n(4, 3), n(2, 2), n(7, 8),
+                 n(9, 3), n(7, 3), n(6, 2), n(4, 4), n(2, 4), n(4, 4), n(7, 4), n(0, 8)],
+                [n(7, 2), n(7, 2), n(9, 4), n(7, 4), n(6, 4),
+                 n(4, 2), n(4, 2), n(6, 4), n(9, 8),
+                 n(7, 2), n(7, 2), n(6, 4), n(4, 4), n(2, 4), n(0, 4), n(4, 4), n(7, 8)],
+                [n(4, 4), n(6, 2), n(7, 2), n(9, 8), n(7, 3), n(6, 3), n(4, 2), n(2, 8),
+                 n(4, 2), n(7, 2), n(9, 4), n(11, 8), n(9, 4), n(7, 4), n(4, 8)]
+            ]
+        case (.hardRock, false):
+            return [
+                [n(0, 4), n(2, 4), n(4, 8), n(2, 4), n(0, 4), n(4, 8),
+                 n(7, 4), n(4, 4), n(2, 8), n(0, 8), n(nil, 8)],
+                [n(4, 4), n(7, 4), n(6, 8), n(4, 4), n(2, 4), n(0, 8),
+                 n(4, 2), n(6, 2), n(7, 4), n(9, 8), n(7, 4), n(4, 4), n(2, 8)],
+                [n(7, 8), n(6, 4), n(4, 4), n(2, 4), n(4, 4), n(0, 8),
+                 n(4, 4), n(7, 4), n(9, 8), n(7, 8), n(4, 8)]
+            ]
+        case (.hardRock, true):
+            return [
+                [n(0, 2), n(4, 2), n(7, 2), n(6, 2), n(4, 4), n(2, 4),
+                 n(0, 2), n(4, 2), n(7, 4), n(9, 8),
+                 n(7, 2), n(6, 2), n(4, 2), n(2, 2), n(0, 8), n(4, 4), n(7, 4), n(11, 8)],
+                [n(7, 2), n(9, 2), n(11, 4), n(9, 4), n(7, 4),
+                 n(6, 2), n(4, 2), n(2, 4), n(0, 8),
+                 n(4, 2), n(7, 2), n(9, 2), n(11, 2), n(9, 8), n(7, 4), n(4, 4), n(0, 8)],
+                [n(4, 3), n(4, 3), n(7, 2), n(6, 4), n(4, 4),
+                 n(2, 3), n(2, 3), n(4, 2), n(0, 8),
+                 n(7, 2), n(9, 2), n(7, 4), n(6, 4), n(4, 4), n(2, 4), n(0, 4), n(4, 8)]
+            ]
+        case (.industrial, false):
+            return [
+                [n(0, 4), n(1, 4), n(0, 8), n(3, 4), n(1, 4), n(0, 8),
+                 n(4, 4), n(3, 4), n(1, 8), n(0, 16)],
+                [n(4, 4), n(3, 4), n(1, 8), n(0, 4), n(1, 4), n(3, 8),
+                 n(4, 4), n(5, 4), n(4, 8), n(1, 8), n(0, 8)],
+                [n(1, 4), n(0, 4), n(4, 8), n(3, 4), n(1, 4), n(0, 8),
+                 n(5, 4), n(4, 4), n(3, 8), n(1, 8), n(0, 8)]
+            ]
+        case (.industrial, true):
+            return [
+                [n(0, 2), n(1, 2), n(0, 2), n(3, 2), n(4, 4), n(3, 4),
+                 n(1, 2), n(0, 2), n(1, 4), n(0, 8),
+                 n(4, 2), n(5, 2), n(4, 4), n(3, 4), n(1, 4), n(0, 4), n(1, 4), n(0, 8)],
+                [n(4, 2), n(4, 2), n(3, 4), n(1, 8), n(0, 2), n(0, 2), n(1, 4), n(4, 8),
+                 n(5, 2), n(4, 2), n(3, 4), n(1, 4), n(0, 4), n(1, 4), n(0, 4), n(4, 8)],
+                [n(0, 3), n(0, 3), n(1, 2), n(0, 4), n(3, 4),
+                 n(4, 3), n(3, 3), n(1, 2), n(0, 8),
+                 n(0, 2), n(3, 2), n(4, 4), n(5, 8), n(4, 4), n(1, 4), n(0, 8)]
+            ]
+        }
     }
 
     init(dream: SleepData, prompt: DreamMediaPrompt) {
@@ -366,24 +496,16 @@ private struct DreamScoreProfile {
         }
         progression = progressionBank[Int(rng.nextFloat() * Float(progressionBank.count)) % progressionBank.count]
 
-        let flowing: [[Int?]] = [
-            [4, 6, 7, 6, 4, nil, 2, 4, 6, 7, 9, 7, 6, nil, 4, nil],
-            [2, 4, 6, 4, 7, 6, 4, nil, 2, 0, 2, 4, 6, 4, 2, nil],
-            [7, 6, 4, 6, 7, 9, 7, nil, 6, 4, 2, 4, 6, 7, 6, nil]
-        ]
-        let driving: [[Int?]] = [
-            [4, 4, 6, 4, 7, 6, 4, nil, 4, 6, 7, 6, 4, 2, 4, nil],
-            [7, 6, 4, 6, 4, nil, 2, 4, 7, 9, 7, 6, 4, 6, 4, nil],
-            [4, nil, 6, 7, 6, 4, nil, 2, 4, 7, 9, 7, 6, 4, nil, nil]
-        ]
-        let melodyBank = (genre == .hardRock || genre == .industrial || genre == .cinematic) ? driving : flowing
-        melody = melodyBank[Int(rng.nextFloat() * Float(melodyBank.count)) % melodyBank.count]
+        // Calmer dreams get the flowing bank, restless ones the agitated bank of the same genre.
+        let agitated = intensity >= 0.5 || abs(polarity) > 0.62
+        melodyPhrases = Self.melodyBank(genre: genre, agitated: agitated)
+        ornamentChance = min(0.6, 0.08 + intensity * 0.5)
 
         let arpBank: [[Int?]] = [
-            [0, 1, 2, 3, 4, 3, 2, 1],
-            [0, 2, 1, 3, 2, 4, 3, 1],
-            [0, 1, 2, 4, 2, 1, 0, 2],
-            [0, 3, 1, 4, 2, 5, 3, 1]
+            [0, 1, 2, 3, 4, 3, 2, 1, 0, 2, 4, 3, 2, 1, 0, 1],
+            [0, 2, 1, 3, 2, 4, 3, 1, 2, 0, 3, 1, 4, 2, 3, 1],
+            [0, 1, 2, 4, 2, 1, 0, 2, 3, 1, 4, 2, 1, 3, 0, 2],
+            [0, 3, 1, 4, 2, 5, 3, 1, 4, 2, 5, 3, 2, 4, 1, 0]
         ]
         arpPattern = arpBank[Int(rng.nextFloat() * Float(arpBank.count)) % arpBank.count]
 
@@ -402,7 +524,13 @@ private struct DreamScoreProfile {
         case .cinematic:
             bassPattern = [0, nil, nil, nil, 0, nil, nil, nil, 4, nil, nil, nil, 0, nil, nil, nil]
         default:
-            bassPattern = [0, nil, nil, nil, nil, nil, nil, nil, 4, nil, nil, nil, nil, nil, nil, nil]
+            let walkingBass: [[Int?]] = [
+                [0, nil, nil, nil, nil, nil, nil, nil, 4, nil, nil, nil, 2, nil, nil, nil],
+                [0, nil, nil, nil, 2, nil, nil, nil, 4, nil, nil, nil, 6, nil, nil, nil],
+                [0, nil, nil, nil, nil, nil, 4, nil, 2, nil, nil, nil, nil, nil, -3, nil],
+                [0, nil, nil, nil, 4, nil, nil, nil, 2, nil, nil, nil, -3, nil, nil, nil]
+            ]
+            bassPattern = walkingBass[Int(rng.nextFloat() * Float(walkingBass.count)) % walkingBass.count]
         }
 
         switch genre {
@@ -437,60 +565,66 @@ private struct DreamScoreProfile {
         case .symphonic:
             leadVoice = .violin
             arpVoice = .harp
-            gains = LayerGains(pad: 1.0, choir: 0.8, lead: 0.9, arp: 0.7, bass: 0.85, guitar: 0, drums: 0.45)
+            gains = LayerGains(pad: 0.50, choir: 0.40, lead: 1.35, arp: 0.75, bass: 0.85, guitar: 0, drums: 0.45)
+            harmonyAmount = 0.55
             baseDrive = 0.03
             baseBrightness = 0.45
-            baseReverbMix = 0.42
+            baseReverbMix = 0.34
             reverbSize = 0.88
             delayMix = 0.14
             baseWidth = 0.95
         case .chamber:
             leadVoice = .flute
             arpVoice = .pluck
-            gains = LayerGains(pad: 0.85, choir: 0.45, lead: 0.95, arp: 0.8, bass: 0.75, guitar: 0, drums: 0.3)
+            gains = LayerGains(pad: 0.42, choir: 0.25, lead: 1.40, arp: 0.85, bass: 0.75, guitar: 0, drums: 0.3)
+            harmonyAmount = 0.45
             baseDrive = 0.02
             baseBrightness = 0.55
-            baseReverbMix = 0.34
+            baseReverbMix = 0.28
             reverbSize = 0.8
             delayMix = 0.12
             baseWidth = 0.8
         case .celestial:
             leadVoice = .bell
             arpVoice = .glass
-            gains = LayerGains(pad: 1.0, choir: 1.0, lead: 0.75, arp: 0.85, bass: 0.6, guitar: 0, drums: 0.2)
+            gains = LayerGains(pad: 0.60, choir: 0.55, lead: 1.20, arp: 0.90, bass: 0.6, guitar: 0, drums: 0.2)
+            harmonyAmount = 0.4
             baseDrive = 0.02
             baseBrightness = 0.7
-            baseReverbMix = 0.55
+            baseReverbMix = 0.44
             reverbSize = 0.92
             delayMix = 0.3
             baseWidth = 1.0
         case .cinematic:
             leadVoice = .brass
             arpVoice = .pluck
-            gains = LayerGains(pad: 0.9, choir: 0.7, lead: 0.95, arp: 0.5, bass: 1.0, guitar: 0.35, drums: 0.95)
+            gains = LayerGains(pad: 0.45, choir: 0.35, lead: 1.35, arp: 0.6, bass: 1.0, guitar: 0.35, drums: 0.95)
+            harmonyAmount = 0.6
             baseDrive = 0.22
             baseBrightness = 0.6
-            baseReverbMix = 0.36
+            baseReverbMix = 0.30
             reverbSize = 0.84
             delayMix = 0.16
             baseWidth = 0.9
         case .hardRock:
             leadVoice = .leadGuitar
             arpVoice = .palmMute
-            gains = LayerGains(pad: 0.28, choir: 0.15, lead: 0.8, arp: 0.3, bass: 1.0, guitar: 1.0, drums: 1.0)
+            gains = LayerGains(pad: 0.18, choir: 0.10, lead: 1.25, arp: 0.35, bass: 1.0, guitar: 1.0, drums: 1.0)
+            harmonyAmount = 0.5
             baseDrive = 0.62 + intensity * 0.2
             baseBrightness = 0.72
-            baseReverbMix = 0.2
+            baseReverbMix = 0.17
             reverbSize = 0.7
             delayMix = 0.14
             baseWidth = 0.85
         case .industrial:
             leadVoice = .leadGuitar
             arpVoice = .palmMute
-            gains = LayerGains(pad: 0.22, choir: 0.2, lead: 0.7, arp: 0.25, bass: 1.0, guitar: 1.0, drums: 1.0)
+            gains = LayerGains(pad: 0.15, choir: 0.12, lead: 1.15, arp: 0.3, bass: 1.0, guitar: 1.0, drums: 1.0)
+            harmonyAmount = 0.35
             baseDrive = 0.78 + intensity * 0.18
             baseBrightness = 0.8
-            baseReverbMix = 0.16
+            baseReverbMix = 0.14
             reverbSize = 0.62
             delayMix = 0.1
             baseWidth = 0.75
@@ -574,12 +708,12 @@ private enum DreamScoreRenderer {
 
         func sectionTargets(_ position: Float) -> (Float, Float, Float, Float, Float, Float, Float) {
             switch position {
-            case ..<0.10: return (1.00, 0.70, 0.00, 0.45, 0.35, 0.00, 0.00)
-            case ..<0.28: return (0.90, 0.45, 0.55, 0.85, 0.90, 0.55, 0.60)
+            case ..<0.10: return (1.00, 0.70, 0.45, 0.45, 0.35, 0.00, 0.00)
+            case ..<0.28: return (0.90, 0.45, 0.80, 0.85, 0.90, 0.55, 0.60)
             case ..<0.50: return (1.00, 0.80, 1.00, 0.90, 1.00, 1.00, 1.00)
-            case ..<0.64: return (0.95, 1.00, 0.35, 0.60, 0.65, 0.35, 0.45)
+            case ..<0.64: return (0.95, 1.00, 0.70, 0.60, 0.65, 0.35, 0.45)
             case ..<0.88: return (1.00, 0.95, 1.00, 1.00, 1.00, 1.00, 1.00)
-            default: return (0.85, 0.75, 0.40, 0.50, 0.50, 0.25, 0.20)
+            default: return (0.85, 0.75, 0.60, 0.50, 0.50, 0.25, 0.20)
             }
         }
 
@@ -608,6 +742,14 @@ private enum DreamScoreRenderer {
         var leadFrequency = profile.tonicHz * 2
         var leadAge: Float = 99
         var leadGate: Float = 0.4
+        var melodyIndex = 0
+        var melodyNextStep = 0
+        var phraseIndex = 0
+        var leadGraceFrequency: Float = 0
+        var leadGraceTime: Float = 0
+        var harmonyPhase: Float = 0
+        var harmonyFrequency = profile.tonicHz * 2
+        var padAge: Float = 0
 
         var arpPhase: Float = 0
         var arpFrequency = profile.tonicHz * 2
@@ -625,6 +767,7 @@ private enum DreamScoreRenderer {
         var padFilterL = StateVariableFilter()
         var padFilterR = StateVariableFilter()
         var leadFilter = StateVariableFilter()
+        var harmonyFilter = StateVariableFilter()
         var bassFilter = StateVariableFilter()
         var guitarCabA = OnePoleFilter(cutoffHz: 3600, sampleRate: sr)
         var guitarCabB = OnePoleFilter(cutoffHz: 3600, sampleRate: sr)
@@ -667,6 +810,7 @@ private enum DreamScoreRenderer {
                 if currentStep % stepsPerChord == 0 {
                     let chordIndex = currentStep / stepsPerChord
                     chordRootDegree = profile.progression[chordIndex % profile.progression.count]
+                    padAge = 0
                     chordTones = [
                         scaleSemitone(chordRootDegree),
                         scaleSemitone(chordRootDegree + 2),
@@ -708,22 +852,33 @@ private enum DreamScoreRenderer {
                     bassAge = 0
                 }
 
-                if currentStep % 2 == 0 {
-                    let eighth = currentStep / 2
-                    let melodyIndex = eighth % profile.melody.count
-                    if let degree = profile.melody[melodyIndex] {
+                // Each four-bar block advances to the next phrase, so the tune runs long-form.
+                if currentStep % (stepsPerBar * 4) == 0 {
+                    phraseIndex = (currentStep / (stepsPerBar * 4)) % max(1, profile.melodyPhrases.count)
+                    melodyIndex = 0
+                    melodyNextStep = currentStep
+                }
+                if currentStep >= melodyNextStep, !profile.melodyPhrases.isEmpty {
+                    let phrase = profile.melodyPhrases[phraseIndex]
+                    let note = phrase[melodyIndex % max(1, phrase.count)]
+                    melodyIndex += 1
+                    melodyNextStep = currentStep + max(1, note.steps)
+                    if let degree = note.degree {
                         leadFrequency = frequency(scaleSemitone(degree) + 12 + voiceOctave)
+                        harmonyFrequency = frequency(scaleSemitone(degree - 2) + 12 + voiceOctave)
                         leadAge = 0
-                        var length = secondsPerStep * 2
-                        var lookahead = 1
-                        while lookahead < 4, profile.melody[(melodyIndex + lookahead) % profile.melody.count] == nil {
-                            length += secondsPerStep * 2
-                            lookahead += 1
+                        leadGate = Float(note.steps) * secondsPerStep * 0.88
+                        if note.steps >= 4, rng.nextFloat() < profile.ornamentChance {
+                            leadGraceFrequency = frequency(scaleSemitone(degree + 1) + 12 + voiceOctave)
+                            leadGraceTime = min(0.07, secondsPerStep * 0.45)
+                        } else {
+                            leadGraceTime = 0
                         }
-                        leadGate = length * 0.85
                     }
+                }
 
-                    let arpIndex = eighth % profile.arpPattern.count
+                if currentStep % 2 == 0 {
+                    let arpIndex = (currentStep / 2) % profile.arpPattern.count
                     if let toneIndex = profile.arpPattern[arpIndex] {
                         let tone = chordTones[toneIndex % 4] + Float((toneIndex / 4) * 12)
                         arpFrequency = frequency(tone + (heavy ? 0 : 12))
@@ -756,6 +911,7 @@ private enum DreamScoreRenderer {
             bassAge += delta
             leadAge += delta
             arpAge += delta
+            padAge += delta
             kickAge += delta
             snareAge += delta
             hatAge += delta
@@ -774,6 +930,8 @@ private enum DreamScoreRenderer {
             let padGain = mixPad * profile.gains.pad
             let choirGain = mixChoir * profile.gains.choir
             let leadGain = mixLead * profile.gains.lead
+            // Thirds only join in once the arrangement opens up.
+            let harmonyGain = leadGain * profile.harmonyAmount * min(1, max(0, mixLead - 0.6) / 0.4)
             let arpGain = mixArp * profile.gains.arp
             let bassGain = mixBass * profile.gains.bass
             let guitarGain = mixGuitar * profile.gains.guitar
@@ -794,9 +952,11 @@ private enum DreamScoreRenderer {
                     sumL += sample * gainL
                     sumR += sample * gainR
                 }
-                let cutoff = 620 + profile.brightness * 1500 + 380 * sinf(2 * .pi * 0.06 * time)
-                padL = padFilterL.lowpass(sumL * 0.16, cutoff: cutoff, resonance: 0.9, sampleRate: sr) * padGain
-                padR = padFilterR.lowpass(sumR * 0.16, cutoff: cutoff, resonance: 0.9, sampleRate: sr) * padGain
+                let cutoff = 520 + profile.brightness * 1150 + 300 * sinf(2 * .pi * 0.06 * time)
+                // Swell into each chord change so the strings breathe instead of sitting flat.
+                let swell = attackEnvelope(padAge, attack: 0.55) * (0.62 + 0.38 * expf(-padAge * 0.45))
+                padL = padFilterL.lowpass(sumL * 0.12, cutoff: cutoff, resonance: 0.9, sampleRate: sr) * padGain * swell
+                padR = padFilterR.lowpass(sumR * 0.12, cutoff: cutoff, resonance: 0.9, sampleRate: sr) * padGain * swell
             }
 
             var choirL: Float = 0
@@ -862,7 +1022,7 @@ private enum DreamScoreRenderer {
             var leadL: Float = 0
             var leadR: Float = 0
             if leadGain > 0.002, leadAge < leadGate + 1.8 {
-                let increment = leadFrequency / sr
+                let increment = (leadAge < leadGraceTime ? leadGraceFrequency : leadFrequency) / sr
                 var sample: Float = 0
                 var envelope: Float = 0
                 switch profile.leadVoice {
@@ -914,10 +1074,30 @@ private enum DreamScoreRenderer {
                         * (leadAge > leadGate ? expf(-(leadAge - leadGate) * 5) : 1)
                         * expf(-leadAge * 0.35)
                 }
-                let value = sample * envelope * leadGain * 0.34
-                let (gainL, gainR) = panGains(-0.12 * profile.stereoWidth)
+                let value = sample * envelope * leadGain * 0.40
+                let (gainL, gainR) = panGains(-0.14 * profile.stereoWidth)
                 leadL = value * gainL
                 leadR = value * gainR
+            }
+
+            var harmonyL: Float = 0
+            var harmonyR: Float = 0
+            if harmonyGain > 0.002, leadAge < leadGate + 1.2 {
+                let increment = harmonyFrequency / sr
+                advance(&harmonyPhase, increment)
+                let raw = heavy
+                    ? overdrive(sawWave(phase: harmonyPhase, increment: increment) * 0.5, drive: profile.drive * 0.75)
+                    : sawWave(phase: harmonyPhase, increment: increment) * 0.45 + sineWave(phase: harmonyPhase) * 0.5
+                let shaped = harmonyFilter.lowpass(raw,
+                                                   cutoff: 1100 + profile.brightness * 1500,
+                                                   resonance: 0.85,
+                                                   sampleRate: sr)
+                let envelope = attackEnvelope(leadAge, attack: 0.1)
+                    * (leadAge > leadGate ? expf(-(leadAge - leadGate) * 7) : 1)
+                let value = shaped * envelope * harmonyGain * 0.30
+                let (gainL, gainR) = panGains(0.34 * profile.stereoWidth)
+                harmonyL = value * gainL
+                harmonyR = value * gainR
             }
 
             var arpL: Float = 0
@@ -994,11 +1174,11 @@ private enum DreamScoreRenderer {
                 drumR *= drumGain * 0.85
             }
 
-            let dryL = padL + choirL + guitarL + leadL + arpL + bass * 0.75 + drumL
-            let dryR = padR + choirR + guitarR + leadR + arpR + bass * 0.75 + drumR
+            let dryL = padL + choirL + guitarL + leadL + harmonyL + arpL + bass * 0.75 + drumL
+            let dryR = padR + choirR + guitarR + leadR + harmonyR + arpR + bass * 0.75 + drumR
 
-            let (delayL, delayR) = delay.process((leadL + arpL) * profile.delayMix,
-                                                 (leadR + arpR) * profile.delayMix)
+            let (delayL, delayR) = delay.process((leadL + harmonyL + arpL) * profile.delayMix,
+                                                 (leadR + harmonyR + arpR) * profile.delayMix)
             let wetL = reverbL.process((dryL + delayL) * profile.reverbMix)
             let wetR = reverbR.process((dryR + delayR) * profile.reverbMix)
 

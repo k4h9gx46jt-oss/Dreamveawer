@@ -30,6 +30,11 @@ struct DreamVisualProfile {
     let bokehCount: Int
     let rayCount: Int
     let rayIntensity: Double
+    let curtainCount: Int
+    let cometCount: Int
+    let flareStrength: Double
+    let sparkBurst: Double
+    let chromaEdge: Double
     let pulseStrength: Double
     let shakeStrength: Double
     let glitchStrength: Double
@@ -84,6 +89,11 @@ struct DreamVisualProfile {
             bokehCount = 16
             rayCount = 11
             rayIntensity = 0.10
+            curtainCount = 5
+            cometCount = 2
+            flareStrength = 0.55
+            sparkBurst = 0.35
+            chromaEdge = 0.25
             pulseStrength = 0.45
             shakeStrength = 0.05
             glitchStrength = 0
@@ -103,6 +113,11 @@ struct DreamVisualProfile {
             bokehCount = 22
             rayCount = 8
             rayIntensity = 0.09
+            curtainCount = 3
+            cometCount = 1
+            flareStrength = 0.40
+            sparkBurst = 0.20
+            chromaEdge = 0.15
             pulseStrength = 0.3
             shakeStrength = 0.02
             glitchStrength = 0
@@ -122,6 +137,11 @@ struct DreamVisualProfile {
             bokehCount = 12
             rayCount = 9
             rayIntensity = 0.12
+            curtainCount = 4
+            cometCount = 5
+            flareStrength = 0.70
+            sparkBurst = 0.45
+            chromaEdge = 0.30
             pulseStrength = 0.5
             shakeStrength = 0.03
             glitchStrength = 0
@@ -141,6 +161,11 @@ struct DreamVisualProfile {
             bokehCount = 10
             rayCount = 13
             rayIntensity = 0.16
+            curtainCount = 2
+            cometCount = 3
+            flareStrength = 0.85
+            sparkBurst = 0.75
+            chromaEdge = 0.45
             pulseStrength = 0.85
             shakeStrength = 0.35
             glitchStrength = 0.08
@@ -160,6 +185,11 @@ struct DreamVisualProfile {
             bokehCount = 8
             rayCount = 15
             rayIntensity = 0.2
+            curtainCount = 0
+            cometCount = 4
+            flareStrength = 1.0
+            sparkBurst = 1.0
+            chromaEdge = 0.60
             pulseStrength = 1.0
             shakeStrength = 0.8
             glitchStrength = 0.35
@@ -179,6 +209,11 @@ struct DreamVisualProfile {
             bokehCount = 6
             rayCount = 17
             rayIntensity = 0.18
+            curtainCount = 0
+            cometCount = 3
+            flareStrength = 0.80
+            sparkBurst = 0.90
+            chromaEdge = 0.90
             pulseStrength = 1.0
             shakeStrength = 1.0
             glitchStrength = 0.85
@@ -372,6 +407,18 @@ private struct FilmBokeh {
     let colorIndex: Int
 }
 
+private struct FilmComet {
+    let startX: Double
+    let startY: Double
+    let angle: Double
+    let speed: Double
+    let period: Double
+    let offset: Double
+    let length: Double
+    let thickness: Double
+    let colorIndex: Int
+}
+
 private final class DreamFilmScene {
     private let profile: DreamVisualProfile
     private let size: CGSize
@@ -380,6 +427,7 @@ private final class DreamFilmScene {
     private let stars: [FilmStar]
     private let particles: [FilmParticle]
     private let bokeh: [FilmBokeh]
+    private let comets: [FilmComet]
     private let grain: CGImage?
 
     init(profile: DreamVisualProfile, size: CGSize) {
@@ -423,6 +471,19 @@ private final class DreamFilmScene {
                       colorIndex: 2 + Int(random.nextFloat() * 3) % 3)
         }
 
+        comets = (0..<profile.cometCount).map { _ in
+            let downward = Double(random.nextFloat()) * 0.9 + 2.6
+            return FilmComet(startX: Double(random.nextFloat()) * Double(size.width) * 1.3 - Double(size.width) * 0.15,
+                             startY: Double(random.nextFloat()) * Double(size.height) * 0.5,
+                             angle: downward,
+                             speed: 0.55 + Double(random.nextFloat()) * 0.85,
+                             period: 6 + Double(random.nextFloat()) * 9,
+                             offset: Double(random.nextFloat()) * 12,
+                             length: 90 + Double(random.nextFloat()) * 190,
+                             thickness: 1.4 + Double(random.nextFloat()) * 2.4,
+                             colorIndex: 3 + Int(random.nextFloat() * 2) % 2)
+        }
+
         grain = DreamFilmScene.makeGrainTile(edge: 192, seed: profile.seed &+ 991)
     }
 
@@ -445,17 +506,22 @@ private final class DreamFilmScene {
         applyCamera(context, time: time, pulse: pulse)
         drawBackdrop(context, time: time)
         drawNebula(context, time: time, energy: energy)
+        drawCurtains(context, time: time, energy: energy)
         drawKeyLight(context, time: time, energy: energy, pulse: pulse)
         drawRibbons(context, time: time, energy: energy, pulse: pulse)
         drawStars(context, time: time, energy: energy)
+        drawComets(context, time: time, energy: energy)
         drawRays(context, time: time, energy: energy, pulse: pulse)
         drawParticles(context, time: time, energy: energy)
         drawBokeh(context, time: time, energy: energy)
+        drawLensFlare(context, time: time, energy: energy, pulse: pulse)
         drawBeatBloom(context, pulse: pulse, energy: energy)
+        drawBeatSparks(context, beat: beat, energy: energy)
         drawGlitch(context, beat: beat, energy: energy, frameIndex: frameIndex)
         context.restoreGState()
 
-        applyColorGrade(context)
+        applyColorGrade(context, time: time)
+        applyEdgeChroma(context)
         applyVignette(context)
         applyGrain(context, frameIndex: frameIndex)
 
@@ -528,6 +594,156 @@ private extension DreamFilmScene {
                                        endCenter: center,
                                        endRadius: CGFloat(radius),
                                        options: [])
+        }
+        context.restoreGState()
+    }
+
+    /// Vertical shimmering light curtains, the signature of the calmer aurora styles.
+    func drawCurtains(_ context: CGContext, time: Double, energy: Double) {
+        guard profile.curtainCount > 0 else { return }
+        context.saveGState()
+        context.setBlendMode(.plusLighter)
+        for index in 0..<profile.curtainCount {
+            let normalized = Double(index) / Double(profile.curtainCount)
+            let centerX = size.width * CGFloat(0.5 + 0.44 * sin(time * (0.07 + normalized * 0.05)
+                + normalized * 6.2831 + profile.horizonPhase))
+            let top = size.height * CGFloat(0.02 + 0.08 * normalized)
+            let height = size.height * CGFloat(0.55 + 0.35 * abs(cos(time * 0.19 + normalized * 2)))
+            let tint = colors[2 + index % 2]
+            let shimmer = 0.45 + 0.55 * abs(sin(time * 0.5 + normalized * 4))
+            // Three nested bands fake a soft horizontal falloff without a second gradient pass.
+            for band in 0..<3 {
+                let width = size.width * CGFloat((0.075 - Double(band) * 0.022)
+                    * (1 + 0.35 * sin(time * 0.23 + normalized * 3)))
+                guard width > 0.5 else { continue }
+                let alpha = CGFloat((0.05 + Double(band) * 0.035) * shimmer * (0.4 + 0.6 * energy))
+                guard let ramp = gradient([tint.withAlphaComponent(0),
+                                           tint.withAlphaComponent(alpha),
+                                           tint.withAlphaComponent(0)],
+                                          locations: [0, 0.4, 1]) else { continue }
+                context.saveGState()
+                context.clip(to: CGRect(x: centerX - width / 2, y: top, width: width, height: height))
+                context.drawLinearGradient(ramp,
+                                           start: CGPoint(x: centerX, y: top),
+                                           end: CGPoint(x: centerX, y: top + height),
+                                           options: [])
+                context.restoreGState()
+            }
+        }
+        context.restoreGState()
+    }
+
+    /// Streaking comets that sweep the frame on their own slow cycles.
+    func drawComets(_ context: CGContext, time: Double, energy: Double) {
+        guard !comets.isEmpty else { return }
+        context.saveGState()
+        context.setBlendMode(.plusLighter)
+        context.setLineCap(.round)
+        let travel = Double(max(size.width, size.height)) * 1.4
+        for comet in comets {
+            let cycle = (time + comet.offset).truncatingRemainder(dividingBy: comet.period) / comet.period
+            guard cycle < 0.32 else { continue }
+            let progress = cycle / 0.32
+            let fade = sin(progress * .pi) * (0.4 + 0.6 * energy)
+            guard fade > 0.02 else { continue }
+            let dx = cos(comet.angle)
+            let dy = sin(comet.angle)
+            let headX = comet.startX + dx * progress * travel * comet.speed
+            let headY = comet.startY + dy * progress * travel * comet.speed
+            let tint = colors[comet.colorIndex % colors.count]
+            for segment in 0..<6 {
+                let near = Double(segment) / 6
+                let far = Double(segment + 1) / 6
+                let alpha = fade * (1 - near) * 0.4
+                context.setStrokeColor(tint.withAlphaComponent(CGFloat(alpha)).cgColor)
+                context.setLineWidth(CGFloat(comet.thickness * (1 - near)))
+                context.move(to: CGPoint(x: headX - dx * comet.length * near, y: headY - dy * comet.length * near))
+                context.addLine(to: CGPoint(x: headX - dx * comet.length * far, y: headY - dy * comet.length * far))
+                context.strokePath()
+            }
+            let head = CGFloat(comet.thickness * 1.6)
+            context.setFillColor(colors[4].withAlphaComponent(CGFloat(fade * 0.85)).cgColor)
+            context.fillEllipse(in: CGRect(x: CGFloat(headX) - head, y: CGFloat(headY) - head,
+                                           width: head * 2, height: head * 2))
+        }
+        context.restoreGState()
+    }
+
+    /// Anamorphic streak plus ghosting along the lens axis.
+    func drawLensFlare(_ context: CGContext, time: Double, energy: Double, pulse: Double) {
+        guard profile.flareStrength > 0.01 else { return }
+        let origin = keyLightPosition(time: time)
+        let strength = profile.flareStrength * (0.45 + 0.55 * energy) * (1 + pulse * 0.8)
+        context.saveGState()
+        context.setBlendMode(.plusLighter)
+
+        let streakWidth = size.width * CGFloat(0.85 + 0.35 * pulse)
+        let streakHeight = CGFloat(3 + 7 * strength)
+        let streak = colors[4].withAlphaComponent(CGFloat(min(0.55, strength * 0.42)))
+        if let ramp = gradient([streak.withAlphaComponent(0), streak, streak.withAlphaComponent(0)],
+                               locations: [0, 0.5, 1]) {
+            context.saveGState()
+            context.clip(to: CGRect(x: origin.x - streakWidth / 2,
+                                    y: origin.y - streakHeight / 2,
+                                    width: streakWidth,
+                                    height: streakHeight))
+            context.drawLinearGradient(ramp,
+                                       start: CGPoint(x: origin.x - streakWidth / 2, y: origin.y),
+                                       end: CGPoint(x: origin.x + streakWidth / 2, y: origin.y),
+                                       options: [])
+            context.restoreGState()
+        }
+
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        for index in 1...5 {
+            let travel = CGFloat(index) * 0.62
+            let ghostCenter = CGPoint(x: origin.x + (center.x - origin.x) * travel,
+                                      y: origin.y + (center.y - origin.y) * travel)
+            let radius = CGFloat(7 + Double(index) * 10) * CGFloat(1 + strength * 0.6)
+            let tint = colors[(index + 1) % colors.count]
+                .withAlphaComponent(CGFloat(strength * 0.11 / Double(index)))
+            guard let ghost = gradient([tint.withAlphaComponent(0), tint, tint.withAlphaComponent(0)],
+                                       locations: [0.35, 0.75, 1]) else { continue }
+            context.drawRadialGradient(ghost,
+                                       startCenter: ghostCenter,
+                                       startRadius: 0,
+                                       endCenter: ghostCenter,
+                                       endRadius: radius,
+                                       options: [])
+        }
+        context.restoreGState()
+    }
+
+    /// Radial spark spray fired on every bar downbeat.
+    func drawBeatSparks(_ context: CGContext, beat: Double, energy: Double) {
+        guard profile.sparkBurst > 0.01 else { return }
+        let bar = beat / 4
+        let phase = bar - floor(bar)
+        guard phase < 0.45 else { return }
+        let progress = phase / 0.45
+        var random = DreamRandom(seed: profile.seed &+ UInt64(bitPattern: Int64(Int(bar) &* 104_729 &+ 7)))
+        let origin = CGPoint(x: size.width / 2, y: size.height * 0.52)
+        let count = 12 + Int(profile.sparkBurst * 28)
+        let reach = Double(size.width) * 0.42
+        context.saveGState()
+        context.setBlendMode(.plusLighter)
+        context.setLineCap(.round)
+        for _ in 0..<count {
+            let angle = Double(random.nextFloat()) * 6.2831
+            let speed = 0.35 + Double(random.nextFloat())
+            let distance = progress * speed * reach
+            let alpha = (1 - progress) * profile.sparkBurst * (0.4 + 0.6 * energy) * 0.7
+            guard alpha > 0.02 else { continue }
+            let x = origin.x + CGFloat(cos(angle) * distance)
+            let y = origin.y + CGFloat(sin(angle) * distance * 0.72)
+            let tailX = origin.x + CGFloat(cos(angle) * distance * 0.86)
+            let tailY = origin.y + CGFloat(sin(angle) * distance * 0.72 * 0.86)
+            let tint = colors[3 + Int(random.nextFloat() * 2) % 2]
+            context.setStrokeColor(tint.withAlphaComponent(CGFloat(alpha)).cgColor)
+            context.setLineWidth(CGFloat(1 + profile.sparkBurst * 2))
+            context.move(to: CGPoint(x: tailX, y: tailY))
+            context.addLine(to: CGPoint(x: x, y: y))
+            context.strokePath()
         }
         context.restoreGState()
     }
@@ -744,9 +960,10 @@ private extension DreamFilmScene {
         context.restoreGState()
     }
 
-    func applyColorGrade(_ context: CGContext) {
-        let warm = colors[3].withAlphaComponent(CGFloat(min(0.6, 0.42 * profile.warmth)))
-        let cool = colors[0].withAlphaComponent(0.55)
+    func applyColorGrade(_ context: CGContext, time: Double) {
+        let drift = CGFloat(sin(time * 0.035) * 0.05)
+        let warm = colors[3].shifted(hue: drift).withAlphaComponent(CGFloat(min(0.6, 0.42 * profile.warmth)))
+        let cool = colors[0].shifted(hue: -drift).withAlphaComponent(0.55)
         guard let grade = gradient([warm, cool], locations: [0, 1]) else { return }
         context.saveGState()
         context.setBlendMode(.softLight)
@@ -754,6 +971,34 @@ private extension DreamFilmScene {
                                    start: CGPoint(x: 0, y: 0),
                                    end: CGPoint(x: size.width * 0.22, y: size.height),
                                    options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+        context.restoreGState()
+    }
+
+    /// Subtle RGB fringing that only shows near the frame edges, like a fast anamorphic lens.
+    func applyEdgeChroma(_ context: CGContext) {
+        guard profile.chromaEdge > 0.005 else { return }
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        let radius = max(size.width, size.height) * 0.82
+        let offset = CGFloat(profile.chromaEdge * 24)
+        let fringes: [(UIColor, CGFloat)] = [
+            (UIColor(red: 1, green: 0.18, blue: 0.28, alpha: 1), offset),
+            (UIColor(red: 0.22, green: 0.5, blue: 1, alpha: 1), -offset)
+        ]
+        context.saveGState()
+        context.setBlendMode(.screen)
+        for (tint, dx) in fringes {
+            let origin = CGPoint(x: center.x + dx, y: center.y)
+            guard let fringe = gradient([tint.withAlphaComponent(0),
+                                         tint.withAlphaComponent(0),
+                                         tint.withAlphaComponent(CGFloat(profile.chromaEdge * 0.14))],
+                                        locations: [0, 0.6, 1]) else { continue }
+            context.drawRadialGradient(fringe,
+                                       startCenter: origin,
+                                       startRadius: 0,
+                                       endCenter: origin,
+                                       endRadius: radius,
+                                       options: [.drawsAfterEndLocation])
+        }
         context.restoreGState()
     }
 

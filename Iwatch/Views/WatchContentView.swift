@@ -76,9 +76,7 @@ struct WatchContentView: View {
 
             connectionBadge
 
-            if !workoutManager.isTracking {
-                compactStartButton
-            }
+            compactSessionButton
 
             elapsedLabel
 
@@ -113,7 +111,6 @@ struct WatchContentView: View {
 
             if workoutManager.isTracking {
                 remPhaseRow
-                actionButton
             }
         }
     }
@@ -357,16 +354,18 @@ struct WatchContentView: View {
         .tint(workoutManager.isTracking ? .red : .purple)
     }
 
-    private var compactStartButton: some View {
-        Button(action: startSession) {
-            Label("Start Dream Mode", systemImage: "moon.zzz.fill")
+    private var compactSessionButton: some View {
+        Button(role: workoutManager.isTracking ? .destructive : nil,
+               action: workoutManager.isTracking ? stopSession : startSession) {
+            Label(workoutManager.isTracking ? "Stop Dream Mode" : "Start Dream Mode",
+                  systemImage: workoutManager.isTracking ? "stop.fill" : "moon.zzz.fill")
                 .font(.caption2.weight(.semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
-        .tint(.purple)
+        .tint(workoutManager.isTracking ? .red : .purple)
         .controlSize(.mini)
     }
 
