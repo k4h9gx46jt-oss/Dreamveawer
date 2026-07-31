@@ -152,3 +152,53 @@ The bundle path must show DreamWeaverWatch.appex.app - the simulator created an 
 
 The fundamental issue is that WatchConnectivity framework expects a companion Watch app that's embedded within the iPhone app bundle, not installed separately. Let me fix this by creating a proper Watch App target structure.
 
+---
+
+# Appendix — Implementation status vs. this vision
+
+> **This document is preserved as the original product vision.** It is intentionally
+> not rewritten. The appendix below records how much of it has been realised.
+> Added 2026-07-31. For verified detail see [STATUS.md](STATUS.md).
+
+## Realised
+
+| Vision element | Outcome |
+| --- | --- |
+| Watch monitors, iPhone interprets | ✅ Built, and either device can start or stop a session |
+| Heart rate variability as emotional intensity | ✅ Real HealthKit HRV, drives mood polarity |
+| Movement as narrative flow | ✅ Real movement data drives REM segmentation |
+| Ambient sound as dream tone | ✅ `environmentalAudioExposure` feeds the profile |
+| REM vs deep sleep as dream phases | ✅ Rule-based classifier, unit tested |
+| Short generated video, 10–30 s | ✅ **Exceeded** — a full MP4 film, duration derived from the REM profile |
+| Music/soundscape from bio rhythm | ✅ **Exceeded** — an original score from a hand-written synthesiser |
+| Visual themes evolve by mood | ✅ Six visual styles paired with six musical genres |
+| Data stored locally for privacy | ✅ Nothing leaves the device — there is no networking code at all |
+
+The project captures **twelve** biosignals, not the four the vision assumed.
+
+## Not yet realised
+
+| Vision element | Status |
+| --- | --- |
+| On-device model producing a symbolic interpretation | ❌ `AIDreamService` is a stub returning randomised text |
+| Dream journal — title, notes, search by theme or feeling | ❌ |
+| Dream style learning / personalised fine-tuning | ❌ planned as "dream fingerprint" |
+| Dream Trends mood graph over time | ❌ blocked by the persistence gap |
+| Regenerate / Save / **Share** on playback | ❌ the MP4 exists on disk but is never exposed |
+| Dream Gallery community layer | ❌ deliberately deferred — user-generated content requires moderation and a backend, which conflicts with the zero-server strategy |
+| AI Dream Insights | ❌ |
+
+## Divergences worth recording
+
+- **No persistence.** Sessions are held in memory only and lost on relaunch. The
+  journal, trends and insights layers cannot be built until this is fixed.
+- **No Metal or SceneKit.** The film renderer is procedural, built on
+  `AVAssetWriter` and CoreGraphics. This turned out to be faster, fully offline and
+  free to run — a better fit for the product than a diffusion model.
+- **No cloud AI.** Intentionally ruled out: per-user API cost is incompatible with
+  the one-time purchase model. See [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) §1.
+- **Watch bundle embedding** (the concern in the paragraph above) is resolved. The
+  watch app and extension are proper targets inside
+  `Ihpone/DreamWeaver/DreamWeaver.xcodeproj` and WatchConnectivity works in both
+  directions, including waking a suspended watch extension.
+

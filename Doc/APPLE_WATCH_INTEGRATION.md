@@ -1,352 +1,238 @@
-# Apple Watch Integration Guide
+# Apple Watch Integration
 
-## Overview
-DreamWeaver now features **full Apple Watch integration** for real-time physiological data collection during sleep. Start and stop sleep tracking from either iPhone or Apple Watch, with live biosignal data syncing automatically between devices.
+**Scope:** the watch↔iPhone connectivity protocol and the data it carries.
+For overall feature status see [STATUS.md](STATUS.md).
 
-## 🎯 Key Features
+---
 
-### ⌚️ **Apple Watch App**
-- **Start/Stop sleep tracking** directly from your wrist
-- **Live heart rate monitoring** with HealthKit
-- **HRV calculation** for sleep quality analysis
-- **Real-time sync** to iPhone every 5 minutes
-- **Background data transfer** when iPhone not reachable
-- **Workout session** integration for continuous tracking
+## 1. Overview
 
-### 📱 **iPhone App Enhancements**
-- **Watch connection status** indicator
-- **Live biosignal display** from Watch during tracking
-- **Heart rate timeline charts** with 5-minute intervals
-- **HRV trend graphs** throughout sleep session
-- **Automatic data synchronization** via WatchConnectivity
-- **Fallback to simulated data** when Watch unavailable
+The Apple Watch is the sensor; the iPhone is the analyser and renderer. Dream Mode
+can be started and stopped from **either** device and the other stays in sync,
+including when the watch app is not running.
 
-### 📊 **Data Collection**
-- **Heart Rate**: Collected continuously from Apple Watch sensors
-- **HRV (Heart Rate Variability)**: Calculated from HR intervals
-- **Timeline Storage**: Data points saved every 5 minutes
-- **Historical Graphs**: View complete HR/HRV trends after waking
-- **Persistent Storage**: All data saved with SwiftData
+---
 
-## 🚀 How to Use
+## 2. Captured signals
 
-### Option 1: Start from Apple Watch (Recommended)
-1. **Open DreamWeaver app on Watch**
-2. Tap **"Start"** button
-3. **HealthKit permission** will be requested (first time only)
-4. Watch begins tracking heart rate and HRV
-5. **Syncs to iPhone every 5 minutes** automatically
-6. When ready to wake, tap **"Stop"** on Watch
-7. **View data on iPhone** with detailed charts
+Twelve values are recorded per sample.
 
-### Option 2: Start from iPhone
-1. **Open DreamWeaver app on iPhone**
-2. Tap **"Start Dream Mode"**
-3. If Watch is connected, it **automatically starts tracking**
-4. iPhone shows **live HR/HRV from Watch** (green "📡 Receiving live data" indicator)
-5. Tap **"Stop Tracking"** on iPhone
-6. **Watch automatically stops** tracking too
-7. View biosignal timeline charts in dream details
+| Signal | Source | Status |
+| --- | --- | --- |
+| Heart rate | HealthKit | ✅ real |
+| Heart rate variability (SDNN) | HealthKit | ✅ real |
+| SpO₂ | HealthKit | ✅ real |
+| Respiratory rate | HealthKit | ✅ real |
+| Environmental audio exposure | HealthKit | ✅ real |
+| Movement | Motion | ✅ real |
+| Wrist temperature delta | Mixed | 🟡 partly synthesised |
+| ECG confidence | — | 🟡 placeholder, no `HKElectrocardiogram` read |
+| Hypertension risk | Derived | 🟡 heuristic, **not clinical** |
+| Apnea risk | Derived | 🟡 heuristic, **not clinical** |
+| Sleep score | Derived | 🟡 heuristic |
+| REM state | `REMClassifier` | ✅ rule-based |
 
-### Viewing Heart Rate Timeline
-1. After stopping a sleep session, go to **main dashboard**
-2. Tap on the **dream card**
-3. Scroll to see:
-   - **Heart Rate Timeline Chart**: Line graph with area fill
-   - **HRV Chart**: Variability trends throughout night
-   - **Statistics**: Average, Min, Max heart rate
-   - **Interactive selection**: Tap chart to see specific time points
+> The three "risk" values are heuristics with no clinical validation. They must be
+> renamed before submission — see [APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md) §1.1.
 
-## 🔧 Technical Architecture
+---
 
-### WatchConnectivity Communication
-**iPhone → Watch:**
-- `startSleep`: Initiates tracking with session ID
-- `stopSleep`: Ends tracking session
-- `getCurrentMetrics`: Requests instant HR/HRV values
+## 3. Timing
 
-**Watch → iPhone:**
-- `biosignalData`: HR/HRV samples every 5 minutes
-- `sessionStarted`: Confirmation of tracking start
-- `sessionStopped`: Confirmation of tracking end
-- Context updates for background transfer
+| Constant | Value | Meaning |
+| --- | --- | --- |
+| `scheduledSampleInterval` | 1 s | Local sample capture |
+| `pushInterval` | 5 s | Push to iPhone |
 
-### Data Flow
-```
-Apple Watch (HealthKit)
-    ↓ Real-time HR/HRV collection
-WorkoutManager
-    ↓ Every 5 minutes
-WatchConnectivity
-    ↓ Message/Context transfer
-iPhone WatchConnectivityManager
-    ↓ Parse and store
-BiosignalDataPoint (SwiftData)
-    ↓ Relationship
-SleepData.biosignalTimeline
-    ↓ Display
-HeartRateChartView (SwiftUI Charts)
-```
+> Earlier versions of this document claimed a 5-**minute** cadence. That has never
+> matched the code. The real cadence is 5 **seconds**, which is a known battery
+> risk and is unvalidated on hardware — see
+> [APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md) §3.1.
 
-### Models
+---
 
-**BiosignalDataPoint:**
+## 4. How to use it
+
+### Start from the watch
+
+1. Open DreamWeaver on the watch and tap **Start**.
+2. Grant HealthKit permission on first launch.
+3. The iPhone reflects the active session automatically.
+4. Tap **Stop** on either device.
+
+### Start from the iPhone
+
+1. Tap **Start Dream Mode**.
+2. The watch begins tracking — **even if its app is closed** (see §6).
+3. The iPhone shows live heart rate and HRV streaming in.
+4. Tap **Stop Tracking**; the watch stops too.
+
+---
+
+## 5. Message protocol
+
+All traffic is `WCSession`. Payloads are `[String: Any]` dictionaries keyed on
+`"command"`.
+
+### iPhone → Watch
+
+| Command | Extras | Purpose |
+| --- | --- | --- |
+| `startSleep` | `sessionId` | Begin a session with a phone-assigned UUID |
+| `stopSleep` | `sessionId` | End the session |
+| `watchStatusProbe` | `timestamp` | Ask for a status snapshot |
+| `samplesRequest` | `since`, `reason` | Backfill samples the phone is missing |
+| `ping` | — | Liveness check |
+
+Application context is also used for control-state reconciliation:
+
 ```swift
-@Model
-final class BiosignalDataPoint {
-    var timestamp: Date      // When collected
-    var heartRate: Double    // BPM from Watch
-    var hrv: Double          // Calculated variability
-    var movement: Double     // Future: accelerometer data
-    var sleepSession: SleepData?  // Parent relationship
+["controlStateSync": true, "tracking": Bool, "sessionId": String, "start": Double, "timestamp": Double]
+```
+
+### Watch → iPhone
+
+| Message type | Purpose |
+| --- | --- |
+| `sleepStart` | Session began on the watch |
+| `sleepEnd` | Session ended, includes the full sample set |
+| `sample` | A single live sample |
+| `sampleBatch` | Batched samples (backfill or catch-up) |
+| `statusRequest` | Ask the phone for its current control state |
+
+Connection state is reported as one of `inactive`, `ready`, `tracking`.
+
+---
+
+## 6. Waking a sleeping watch app
+
+`WCSession` can deliver a message while the watch extension is suspended. The flow:
+
+```mermaid
+sequenceDiagram
+    participant P as iPhone
+    participant W as WCSession (watch)
+    participant S as RemoteCommandStore
+    participant E as ExtensionDelegate
+    participant M as WorkoutManager
+
+    P->>W: startSleep(sessionId)
+    alt Extension is running
+        W->>E: handleRemoteCommandPayload
+        E->>M: start(remoteSessionId:)
+    else Extension is suspended
+        W->>S: enqueue(command)
+        W->>W: scheduleBackgroundWake()
+        Note over W: WKExtension background refresh
+        W->>E: handle(_:) fires
+        E->>S: drain queue
+        E->>M: start(remoteSessionId:)
+    end
+    M-->>P: sleepStart confirmation
+```
+
+Without `RemoteCommandStore`, starting Dream Mode from the iPhone with the watch
+app closed silently did nothing. This was the subject of several bug-fix commits.
+
+---
+
+## 7. Session survival
+
+- `WorkoutManager` persists `tracking`, `sessionStart` and `sessionId` to
+  `UserDefaults` and restores them on launch (`restorePersistedSessionIfNeeded`).
+- `WKExtendedRuntimeSession` keeps the runtime alive past the normal watch app
+  limit.
+- `reconcilePhoneControlState` resolves disagreements — if the phone believes a
+  session is active and the watch does not, the watch resumes it; if they disagree
+  on session ID, the watch stops the stale one and adopts the phone's.
+
+---
+
+## 8. Data model
+
+`BiosignalDataPoint` is a plain `Codable` struct, **not** a SwiftData `@Model`:
+
+```swift
+struct BiosignalDataPoint: Identifiable, Codable {
+    let timestamp: Date
+    let heartRate: Double
+    let hrv: Double
+    let movement: Double
+    let spo2: Double
+    let respiratoryRate: Double
+    let ecgConfidence: Double
+    let hypertensionRisk: Double
+    let wristTemperatureDelta: Double
+    let sleepScore: Double
+    let noiseExposure: Double
+    let apneaRisk: Double
 }
 ```
 
-**SleepData (Updated):**
-```swift
-@Relationship(deleteRule: .cascade)
-var biosignalTimeline: [BiosignalDataPoint] = []
-```
+Samples land in `SleepSession.biosignals`, which is aggregated into a
+`REMDreamProfile` by `SleepSession.analyzeREMProfile()`.
 
-### Chart Features
-- **Line graph** with gradient area fill
-- **5-minute intervals** on X-axis
-- **Auto-scaling** Y-axis based on min/max
-- **Statistics panel**: Avg/Min/Max with icons
-- **Time formatting**: Shows elapsed time from sleep start
-- **Empty state**: Graceful message when no Watch data
-- **Separate HRV chart**: Independent visualization
-
-## 📱 Requirements
-
-### Hardware
-- **iPhone** running iOS 17.0+
-- **Apple Watch** running watchOS 10.0+
-- **Paired devices** via Apple Watch app
-
-### Permissions
-- **HealthKit** permission on Apple Watch (requested automatically)
-- **Motion & Fitness** tracking enabled in iOS Settings
-
-### Network
-- **No internet required** for Watch-iPhone sync
-- Uses **Bluetooth** for direct communication
-- **Background sync** via WatchConnectivity context updates
-
-## 🎨 UI Elements
-
-### iPhone Sleep Tracking View
-```
-┌─────────────────────────────┐
-│  🌙 Tracking Your Dreams... │
-│                             │
-│   ⌚️ Watch Connected        │ ← Status indicator
-│                             │
-│      03:25:14               │ ← Elapsed time
-│                             │
-│   ❤️ 62 bpm   💓 45 ms      │ ← Live Watch data
-│                             │
-│ 📡 Receiving live data      │ ← Sync confirmation
-│                             │
-│   [Stop Tracking]           │
-└─────────────────────────────┘
-```
-
-### Apple Watch App
-```
-┌─────────────────┐
-│   🌙 DreamWeaver │
-│   Tracking...    │
-│                  │
-│   ❤️ 62 BPM      │ ← Live HR
-│   💓 45 ms       │ ← Live HRV
-│                  │
-│   03:25:14       │ ← Timer
-│                  │
-│ 📡 Syncing to    │
-│    iPhone        │
-│                  │
-│   [Stop]         │
-└─────────────────┘
-```
-
-### Heart Rate Chart (iPhone)
-```
-┌─────────────────────────────────────┐
-│ ❤️ Heart Rate Timeline  20 samples  │
-│                                     │
-│ Heart Rate: 62 bpm  Time: 1h 25m   │ ← Selected point
-│                                     │
-│  80 ┼─╮                            │
-│     │  ╰╮    ╭╮                    │
-│  70 ┼   ╰─╮ ╭╯╰╮  ╭─╮             │
-│     │     ╰─╯  ╰──╯ ╰╮            │
-│  60 ┼                ╰───          │
-│     │                              │
-│  50 ┼                              │
-│     └─────────────────────────────  │
-│     0m    1h    2h    3h    4h     │
-│                                     │
-│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-│                                     │
-│ 📊 Avg: 65 bpm  ⬇️ Min: 52 bpm    │
-│ ⬆️ Max: 78 bpm                     │
-└─────────────────────────────────────┘
-```
-
-## 🔐 Privacy & Security
-
-### Data Storage
-- **All biosignal data stored locally** on iPhone
-- **SwiftData encryption** at rest
-- **No cloud sync** by default
-- **User controls** all data
-
-### HealthKit Access
-- **Watch only requests HR/HRV** permissions
-- **No health data stored on Watch** permanently
-- **Transferred immediately** to iPhone
-- **HealthKit privacy** framework compliance
-
-### WatchConnectivity
-- **Direct Bluetooth** communication
-- **No intermediary servers**
-- **Encrypted by iOS/watchOS** automatically
-- **Session-based** authentication
-
-## 🐛 Troubleshooting
-
-### Watch not connecting
-**Solution:**
-1. Ensure Watch and iPhone are paired in **Watch app**
-2. Check **Bluetooth is enabled** on both devices
-3. Keep devices **within 10 meters** during tracking
-4. Restart **WatchConnectivity** by force-quitting apps
-
-### No heart rate data showing
-**Solution:**
-1. Grant **HealthKit permissions** on Watch (Settings → Health → Data Access)
-2. Ensure **Wrist Detection** enabled (Watch app → Passcode)
-3. Check **Watch is worn properly** (snug but comfortable)
-4. Start tracking from Watch first, then check iPhone
-
-### Data not syncing
-**Solution:**
-1. Check **"📡 Receiving live data"** indicator on iPhone
-2. Verify **Watch Connected** green badge shows
-3. Wait 5 minutes for next **automatic sync**
-4. If still fails, **stop and restart** tracking
-
-### Charts show no data
-**Solution:**
-1. Ensure you **tracked with Apple Watch** (not iPhone-only simulation)
-2. Check **biosignalTimeline has entries** (should show "X samples")
-3. Verify tracking ran for **at least 5 minutes**
-4. Data points saved **every 5 minutes**, so short sessions may have few samples
-
-### Watch app won't start
-**Solution:**
-1. **Physical Watch required** - simulators don't support HealthKit fully
-2. Install app from **Xcode to physical Watch** paired with Mac
-3. Check **watchOS version** is 10.0+
-4. Ensure **iPhone app installed first**
-
-## 🚧 Known Limitations
-
-### Simulator Constraints
-- **Apple Watch simulators** don't fully support HealthKit
-- **Heart rate collection** requires physical Apple Watch
-- **WatchConnectivity** works in simulator but no real HR data
-- **Testing requires paired physical devices**
-
-### HealthKit Data
-- **HRV calculation** is simplified (production should use proper R-R intervals)
-- **Movement data** from accelerometer not yet implemented
-- **Sleep stages** (REM/Deep) still estimated, not from Watch
-
-### Battery Impact
-- **Continuous HR tracking** uses more battery than normal
-- **5-minute sync intervals** balance battery vs data resolution
-- **Overnight tracking** (8 hours) typically uses 15-20% Watch battery
-- **Recommended**: Charge Watch to 80%+ before sleep
-
-## 🔮 Future Enhancements
-
-### Planned Features
-- **Real sleep stage detection** from Watch sensors
-- **Accelerometer data** for movement tracking
-- **Blood oxygen** monitoring (Watch Series 6+)
-- **Respiratory rate** from motion sensors
-- **Temperature sensing** (Watch Series 8+)
-- **Export to Apple Health** app
-- **Weekly/monthly trends** analysis
-- **Smart alarms** based on sleep cycles
-- **Share with partners** via iCloud
-
-### AI Enhancements
-- **Predict dream mood** from real-time HR patterns
-- **Detect sleep disturbances** automatically
-- **Personalized insights** based on your data
-- **Sleep recommendations** powered by AI
-
-## 📊 Data Examples
-
-### Typical Sleep Session
-
-**Duration**: 7h 45m  
-**Data Points**: 93 samples (every 5 minutes)  
-**Average Heart Rate**: 58 bpm  
-**Min HR**: 48 bpm (deep sleep)  
-**Max HR**: 72 bpm (REM sleep)  
-**Average HRV**: 65 ms  
-**HRV Range**: 42-88 ms
-
-### Chart Interpretation
-- **Low HR + High HRV** = Deep, restorative sleep
-- **High HR + Low HRV** = Light sleep or REM
-- **Spikes in HR** = Possible disturbances
-- **Steady HR** = Stable, quality sleep
-
-## 🆘 Support
-
-### Getting Help
-1. Check **"Watch Connected"** status on iPhone
-2. Review **Console logs** for sync messages
-3. Verify **HealthKit permissions** granted
-4. Test with **short 5-minute session** first
-
-### Debug Mode
-Enable verbose logging by checking console for:
-- `✅` Success messages (data sent/received)
-- `📱` iPhone connectivity events
-- `⌚️` Watch session activation
-- `❌` Error messages with descriptions
-
-## 🎉 Success Indicators
-
-You know it's working when you see:
-- ✅ **"⌚️ Watch Connected"** badge on iPhone
-- ✅ **"📡 Receiving live data from Watch"** during tracking
-- ✅ **Real heart rate values** updating live (not simulated 60-70 range)
-- ✅ **Heart Rate Timeline chart** with data after session
-- ✅ **Multiple data points** (one every 5 minutes)
-- ✅ **HRV values** showing (not zero)
+> Older revisions of this document showed `@Model` classes with
+> `@Relationship(deleteRule: .cascade)`. That code does not exist and would not
+> compile against the current model layer.
 
 ---
 
-## Quick Start Checklist
+## 9. Requirements
 
-- [ ] **Pair Apple Watch** with iPhone
-- [ ] **Install DreamWeaver** on both devices
-- [ ] **Grant HealthKit permission** on Watch
-- [ ] **Open Watch app** and tap Start
-- [ ] **Verify iPhone** shows "Watch Connected"
-- [ ] **See live heart rate** updating on iPhone
-- [ ] **Wait 5+ minutes** for first data sync
-- [ ] **Stop tracking** from either device
-- [ ] **View heart rate chart** in dream details
-- [ ] **Celebrate** your first successful Watch-synced dream! 🎉
+| Component | Minimum |
+| --- | --- |
+| iOS | 26.2 |
+| watchOS | 11.0 |
+| Hardware | Apple Watch with heart-rate sensor, paired iPhone |
+| Network | None — communication is direct, no servers involved |
 
 ---
 
-*Ready to track your dreams with real physiological data? Put on your Apple Watch and start dreaming!* 🌙⌚️
+## 10. Privacy
+
+- All biosignal data stays on-device. There is no networking code in this project.
+- The watch does not retain health data after a session is transferred.
+- WatchConnectivity traffic is encrypted by the OS.
+
+Note that "encryption at rest via SwiftData" was previously claimed here. There is
+no persistence layer at all today — see [STATUS.md](STATUS.md) §7.
+
+---
+
+## 11. Troubleshooting
+
+| Symptom | Checks |
+| --- | --- |
+| Watch not connecting | Devices paired in the Watch app; Bluetooth on; apps not force-quit |
+| No heart rate | HealthKit permission granted on watch; wrist detection on; watch worn snugly. **The HealthKit entitlement is currently missing** — see [APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md) §0.1 |
+| Data not syncing | Look for the "Receiving live data" indicator; pushes occur every 5 s |
+| Charts empty | Session must have run long enough to produce samples; simulator produces no real HealthKit data |
+| Watch app will not start | Physical hardware required for HealthKit; install the iPhone app first |
+
+---
+
+## 12. Known limitations
+
+- Apple Watch **simulators do not provide real HealthKit data**. Meaningful testing
+  requires a paired physical iPhone and Watch.
+- HRV uses HealthKit SDNN rather than raw R-R intervals.
+- Sleep staging is threshold-based, not machine learning, and Apple's own
+  `HKCategoryType.sleepAnalysis` is never cross-checked.
+- Overnight battery impact is **unmeasured**. The 5-second push cadence is
+  aggressive and may materially exceed the 15% target.
+
+---
+
+## 13. Planned work
+
+Tracked in [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) and
+[APPLE_WATCH_ROADMAP.md](APPLE_WATCH_ROADMAP.md):
+
+- Adaptive sampling to protect battery
+- Bedside Mode with always-on display
+- Smart Wake during light sleep
+- REM-timed haptic cues for lucid dream training
+- Watch complications for one-tap start
+- Write sessions back to the Health app
+- Real ECG capture instead of the confidence placeholder

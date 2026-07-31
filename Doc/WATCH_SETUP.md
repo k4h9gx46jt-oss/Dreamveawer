@@ -1,110 +1,133 @@
-# Watch App Setup Guide
+# Building and Running the Watch Target
 
-## Current Status
-✅ iPhone app is fully functional and installed
-✅ iPhone & Watch simulators are paired (Pair ID: E61C9CC0-C605-4C28-A930-FC97976689E5)
-✅ Both simulators are booted and connected
-❌ Watch app has build issue from command line (CopyAndPreserveArchs bug)
+**Scope:** how to build, install and run the watchOS app. For capability
+configuration see [WATCH_APP_SETUP.md](WATCH_APP_SETUP.md).
 
-## Solution: Run from Xcode
+> This document previously referenced a project named `Dream Vewawer` at
+> `/Users/SEV0A/Iphone/GJSPO/...`. **That path and project name no longer exist.**
+> All paths below are current.
 
-### Steps to Launch Watch App:
+---
 
-1. **Open Xcode Project**
-   - The project is already open: `Dream Vewawer.xcodeproj`
+## 1. Project location
 
-2. **Select Watch Scheme**
-   - Click the scheme selector (top-left, next to play button)
-   - Choose: **"DreamWeaver Watch App"**
+```
+Ihpone/DreamWeaver/DreamWeaver.xcodeproj
+```
 
-3. **Select Watch Simulator as Destination**
-   - Click the device selector (next to scheme)
-   - Choose: **"Apple Watch Series 11 (46mm)"** (already booted)
+One project, five targets. Watch sources live in `Iwatch/`, iOS sources in
+`Ihpone/`, and `Shared/` is compiled into both platforms.
 
-4. **Run the Watch App**
-   - Click the **▶️ Play button** (or press Cmd+R)
-   - Xcode will handle the CopyAndPreserveArchs issue automatically
-   - The Watch app will build, install, and launch
+| Scheme | Runs on |
+| --- | --- |
+| `DreamWeaver` | iPhone |
+| `DreamWeaver WatchKit App` | Apple Watch |
 
-### What You Should See:
+---
 
-**On Watch Simulator:**
-- App launches showing:
-  - "Start Sleep Tracking" button
-  - Heart rate: "-- BPM"
-  - Duration: "0:00:00"
-  - Sync status with iPhone
+## 2. Helper scripts
 
-**On iPhone Simulator:**
-- Open Dream Vewawer app
-- You should see "Watch Connected" indicator
-- Start Dream Mode to begin tracking
+Run these from the repository root.
 
-### Testing the Connection:
+| Script | Purpose |
+| --- | --- |
+| `./run-tests.sh` | Unit tests plus a watchOS compile check |
+| `./run-tests.sh --watch` | Only the sleep-staging suite |
+| `./run-tests.sh --all` | Unit and UI tests |
+| `./start-dreamweaver.sh` | Boot simulators, build and launch |
+| `./test-and-start.sh` | Test, then launch if green |
+| `./reinstall.sh` | Clean reinstall on the booted simulators |
 
-1. **Start from Watch:**
-   - Tap "Start Sleep Tracking" on Watch
-   - Watch collects heart rate via HealthKit
-   - Data syncs to iPhone every 5 minutes
+Override the iOS simulator with `DREAMWEAVER_IOS_SIM_NAME`:
 
-2. **Start from iPhone:**
-   - Tap "Start Dream Mode" on iPhone
-   - iPhone tells Watch to start tracking
-   - Both apps show synchronized status
-
-### Troubleshooting:
-
-**If Watch app doesn't appear in Xcode schemes:**
-1. Product menu → Scheme → Manage Schemes
-2. Make sure "DreamWeaver Watch App" is checked
-3. Close and reopen scheme list
-
-**If build still fails in Xcode:**
-The project file may have been corrupted by command-line attempts.
-Restore it:
 ```bash
-cd "/Users/SEV0A/Iphone/GJSPO/DreamWeaver/Dream Vewawer"
-git restore "Dream Vewawer.xcodeproj/project.pbxproj"
+DREAMWEAVER_IOS_SIM_NAME="iPhone 17" ./run-tests.sh
 ```
 
-## Technical Details
+---
 
-### Why Command-Line Build Fails:
-- Xcode 26.1 has a bug with watchOS apps
-- "CopyAndPreserveArchs" phase conflicts with linker
-- Xcode GUI handles this automatically
-- Command-line tools don't apply the workaround
+## 3. Running from Xcode
 
-### Simulators Setup:
+1. Open `Ihpone/DreamWeaver/DreamWeaver.xcodeproj`.
+2. Select the **DreamWeaver WatchKit App** scheme.
+3. Pick a paired Apple Watch simulator or a physical watch.
+4. Press ⌘R.
+
+If the watch scheme is missing: **Product → Scheme → Manage Schemes**, tick
+`DreamWeaver WatchKit App`.
+
+---
+
+## 4. Simulator pairing
+
+```bash
+xcrun simctl list devices available     # find UDIDs
+xcrun simctl list pairs                 # check existing pairs
 ```
-iPhone 16e: F7BCCE4F-8C56-4C92-8878-3BBE2F169FD3 (Booted)
-Watch Series 11: 4FE28B3D-1A9C-44F7-A3F1-C49A09B5DD3C (Booted)
-Pair: E61C9CC0-C605-4C28-A930-FC97976689E5 (Connected)
-```
 
-### Bundle IDs:
-- iPhone: `GJSA.Dream-Vewawer`
-- Watch: `GJSA.Dream-Vewawer.DreamWeaverWatchApp`
+Pair through **Xcode → Window → Devices and Simulators → Simulators** if no pair
+exists. Both devices must be booted before WatchConnectivity will activate.
 
-### Features Ready:
-- ✅ WatchConnectivity bidirectional sync
-- ✅ HealthKit heart rate & HRV collection
-- ✅ 5-minute automatic sync interval
-- ✅ Real-time status updates
-- ✅ AI dream interpretation
-- ✅ Timeline charts
-- ✅ Moon icon on both platforms
+---
 
-## Next Steps
+## 5. Simulator limitations
 
-**Once Watch app is running:**
-1. Test sleep tracking workflow
-2. Verify data sync between devices
-3. Check timeline visualization on iPhone
-4. Test AI dream interpretation
+**Apple Watch simulators do not provide real HealthKit data.** In the simulator you
+can verify:
 
-**For Physical Device Testing:**
-- Both apps will need proper code signing
-- Apple Watch must be paired with iPhone
-- HealthKit permissions required
-- WatchConnectivity works automatically when paired
+- ✅ UI layout and navigation
+- ✅ WatchConnectivity message flow
+- ✅ Session lifecycle and state reconciliation
+- ✅ REM classifier logic (via unit tests)
+
+You cannot verify:
+
+- ❌ Real heart rate, HRV, SpO₂ or respiratory rate
+- ❌ Battery consumption
+- ❌ Overnight background survival
+- ❌ Extended runtime session behaviour
+
+Anything battery- or sensor-related **must** be tested on physical hardware.
+
+---
+
+## 6. Physical device testing
+
+1. Pair the Apple Watch with the iPhone.
+2. Sign both targets with the same team (`28TCC8Y78C` by default).
+3. Install the iPhone app first, then the watch app.
+4. Trust the developer profile on both devices.
+5. Grant HealthKit permission on first launch.
+
+> **Blocker:** the HealthKit entitlement is currently missing from every target,
+> so authorization will fail on hardware. Fix
+> [APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md) §0.1 first.
+
+---
+
+## 7. Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| Watch scheme not listed | Product → Scheme → Manage Schemes |
+| `CopyAndPreserveArchs` failure from the command line | Build the watch scheme from the Xcode GUI instead |
+| Watch shows "not reachable" | Both simulators booted and paired; both devices unlocked |
+| No heart rate on device | HealthKit permission granted **and** entitlement present |
+| Stale build after source changes | `rm -rf .derivedData` then rebuild |
+
+---
+
+## 8. Current configuration
+
+| Setting | Value |
+| --- | --- |
+| iOS deployment target | 26.2 |
+| watchOS deployment target | 11.0 |
+| iPhone bundle ID | `GJDRW.DreamWeaver` |
+| Watch app bundle ID | `GJDRW.DreamWeaver.watchkitapp` |
+| Watch extension bundle ID | `GJDRW.DreamWeaver.watchkitapp.watchkitextension` |
+| Development team | `28TCC8Y78C` |
+| Code signing | Automatic |
+
+> The bundle identifiers are not in reverse-DNS form and should be changed before
+> the first App Store submission — they cannot be changed afterwards.

@@ -1,38 +1,93 @@
-# DreamWeaver iPhone Prototype
+# DreamWeaver — iOS Target
 
-This SwiftUI prototype mirrors the DreamWeaver specification inside `Doc/`. It ships with mock data, simulated AI dream generation, and placeholder WatchConnectivity hooks so you can preview the full user journey entirely in the simulator.
+The iPhone side: receives biosignals from the watch, segments REM windows, and
+renders the dream film and score. See [../README.md](../README.md) for the project
+overview and [../Doc/STATUS.md](../Doc/STATUS.md) for verified feature status.
+
+---
 
 ## Structure
 
 ```
 Ihpone/
-├── DreamWeaverApp.swift
 ├── Models/
+│   ├── SleepData.swift          Finished dream record + REMDreamProfile, REMSegment
+│   ├── BiosignalDataPoint.swift One sample, 12 signals
+│   ├── DreamMood.swift          Mood enum + colour palettes
+│   ├── SleepDataStore.swift     In-memory store + SleepSession
+│   └── REMWindow.swift
 ├── Services/
-└── Views/
+│   ├── DreamMediaComposer.swift   Media orchestration, score synthesis, DSP
+│   ├── DreamFilmRenderer.swift    Visual profiles + AVAssetWriter
+│   ├── WatchConnectivityManager.swift
+│   ├── AIDreamService.swift       Narrative — STUB
+│   ├── HealthKitManager.swift     Authorization only
+│   └── ParticleEngine.swift       Legacy visualisation
+├── Views/
+│   ├── ContentView.swift
+│   ├── DreamDashboardView.swift
+│   ├── SleepTrackingView.swift
+│   ├── DreamDetailView.swift
+│   ├── DreamVideoView.swift
+│   ├── DreamVisualizationView.swift
+│   └── Components/
+└── DreamWeaver/                 Xcode project + test targets
 ```
 
-- **Models** define the SwiftData-ready entities (`SleepData`, `BiosignalDataPoint`, `DreamMood`).
-- **Services** simulate AI interpretation and Watch/HealthKit integrations.
-- **Views** reproduce the dashboard, tracker, detail sheet, and visualization layers described in the docs.
+---
 
-## Running in Xcode
+## Building
 
-1. Open Xcode → `File > Open...` → select the `Ihpone` folder.
-2. Choose *App* template when prompted, replace generated files with the provided sources.
-3. Target **iOS 17** or newer, and enable the *HealthKit* and *WatchConnectivity* capabilities if you plan to connect to the watch prototype.
-4. Build & run on an iPhone 16 simulator (or physical iPhone running iOS 17+).
+```bash
+open DreamWeaver/DreamWeaver.xcodeproj
+```
 
-## Testing Workflow
+Or from the repository root: `./run-tests.sh`, `./start-dreamweaver.sh`.
 
-1. Tap **Start Dream Mode** on the hero card.
-2. Let the mock tracker run for ~10 seconds (live vitals are simulated but update every 5 seconds).
-3. Tap **Stop Tracking** and wait for the “Interpreting your dream…” progress view to complete.
-4. A new dream card appears in the dashboard. Tap it to open the detail screen, review the AI narrative, tags, intensity bars, and heart-rate chart.
-5. Tap the visualization hero to watch the particle animation inspired by the dominant dream mood.
+---
 
-## Next Steps
+## Key facts
 
-- Replace `AIDreamService` with real OpenAI/Anthropic calls (see `Doc/AI_DREAM_GUIDE.md`).
-- Connect `PhoneWatchConnectivityManager` to the actual shared WatchConnectivity manager once the watch target lives inside the same Xcode project.
-- Swap the mock `SleepData.mock()` data with persisted SwiftData once schema migrations are set.
+- **`SleepData` is a `Codable` struct, not a SwiftData `@Model`.** The only
+  SwiftData usage is the unused Xcode template file
+  `DreamWeaver/DreamWeaver/Item.swift`, which should be deleted.
+- **`SleepDataStore` is in-memory and seeded with two mock dreams.** Nothing is
+  persisted. This is the largest gap in the project.
+- **`AIDreamService` is a stub.** It ignores the session it is given and returns
+  randomised values plus one of six hardcoded narratives. There is no OpenAI or
+  Anthropic integration and there never has been.
+- **`DreamMediaComposer` and `DreamFilmRenderer` are the real engine** — ~2 500
+  lines producing a genuine MP4 and an original score. No third-party dependencies,
+  no Metal, no SceneKit, no diffusion model.
+- **The iOS target has no HealthKit entitlement and no usage description strings.**
+  HealthKit calls will crash on a real device.
+
+---
+
+## Testing the flow in the simulator
+
+1. Tap **Start Dream Mode**.
+2. Let the tracker run — without a paired watch the vitals are simulated.
+3. Tap **Stop Tracking** and wait for interpretation to finish.
+4. A dream card appears. Open it for charts, narrative and theme tags.
+5. Play the dream film. Note that generation needs a non-nil `remProfile`,
+   otherwise `ComposerError.missingREMProfile` is thrown.
+
+Dreams disappear when the app restarts — this is expected until persistence exists.
+
+---
+
+## Next steps
+
+Ordered by priority; detail in
+[../Doc/APP_STORE_CHECKLIST.md](../Doc/APP_STORE_CHECKLIST.md) and
+[../Doc/PRODUCT_ROADMAP.md](../Doc/PRODUCT_ROADMAP.md).
+
+1. Add a persistence layer and remove the seeded mocks
+2. Add the HealthKit entitlement and iOS usage description strings
+3. Add `PrivacyInfo.xcprivacy`
+4. Replace `AIDreamService` with an on-device engine
+5. Expose the rendered MP4 via `ShareLink`
+6. Delete `DreamWeaver/DreamWeaver/Item.swift`
+7. Add settings, onboarding, empty states and notifications
+8. Migrate hardcoded strings to a String Catalog before any translation work

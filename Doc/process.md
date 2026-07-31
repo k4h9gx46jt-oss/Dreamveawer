@@ -1,59 +1,164 @@
-# DreamWeaver Code & Documentation Alignment
+# Vision ↔ Implementation Conformance Review
 
-## 1. High-Level Flow
-- **Pre-sleep setup** (Instruction.md): `ContentView` presents the "Start Dream Mode" CTA, routing to `SleepTrackingView` where the user arms a session. This mirrors the doc flow (iPhone stays bedside, Watch collects data).
-- **During sleep**: 
-  - If a Watch is reachable, `SleepTrackingView` asks `WatchConnectivityManager` to `startSleepSession`. The Watch `WorkoutManager` boots an `HKWorkoutSession`, streams HR/HRV every five minutes, and acknowledges with `sessionStarted` as prescribed in APPLE_WATCH_INTEGRATION.md.
-  - When the Watch is unreachable, the iPhone view keeps the timers and simulated vitals so the UI remains responsive (fallback described in doc).
-- **Morning / on stop**:
-  - `SleepTrackingView.stopTracking` requests a stop on the Watch, instantiates `SleepData`, attaches the session UUID so deferred Watch packets land on the right record, and launches `AIDreamService`.
-  - `AIDreamService` executes the provider chosen in AI_DREAM_GUIDE.md (OpenAI, Anthropic, or default local). On success it populates `SleepData` with narrative, themes, symbolism, intensity, consciousness, and visual prompt.
-  - Returning to `ContentView`, the new `SleepData` becomes the "Last Dream" card. `DreamDetailView` renders charts and the visualization entry point, matching the "Morning" step in Instruction.md.
+**Last reviewed:** 2026-07-31 against commit `9b3eae6`.
 
-## 2. Data Model Mapping
-- `SleepData` encapsulates the metrics called out in Instruction.md (duration, HR, HRV, movement, REM %, deep %, ambient noise). It also stores AI augmentations enumerated in AI_DREAM_GUIDE.md and maintains a cascade-linked `biosignalTimeline` for Watch samples.
-- `BiosignalDataPoint` (per APPLE_WATCH_INTEGRATION.md) captures timestamped HR/HRV/movement readings, linked back to the session.
+This document compares the original product vision in [Instruction.md](Instruction.md)
+with what the code actually does. For a plain status list see [STATUS.md](STATUS.md).
 
-## 3. Apple Watch Integration Chain
-- **Connectivity layer**: `WatchConnectivityManager`
-  - Activates the default `WCSession`, tracks reachability/install state, and exposes bindings consumed by `SyncStatusView` to deliver the UX cues described in SYNC_STATUS.md.
-  - Sends `startSleep`/`stopSleep`/`getCurrentMetrics` commands and expects `biosignalData` packets, exactly matching the command schema listed in APPLE_WATCH_INTEGRATION.md.
-  - Persists received samples into SwiftData, keyed by session UUID, then refreshes live vitals for the tracking view.
-- **Watch execution**: `WorkoutManager`
-  - Requests HealthKit permission (HKWorkoutType + HR) per WATCH_SETUP.md.
-  - Handles `startSleep` by generating a session UUID, starting an `.other` indoor workout, and booting timers for elapsed time and 5-minute dispatch cadence in line with the doc.
-  - Delivers biosignal metrics through `sendMessage` or, if the phone is not reachable, `updateApplicationContext` (background path documented in APPLE_WATCH_INTEGRATION.md).
-  - Replies to `getCurrentMetrics` pings, providing the live HR/HRV overlays that `SleepTrackingView` surfaces in the "📡 Receiving live data" banner.
-- **Watch UI**: `DreamWeaver Watch App/ContentView` surfaces the simplified start/stop experience called out in WATCH_APP_SETUP.md, reflecting connectivity and cardio stats.
+---
 
-## 4. iPhone UI Surfaces
-- `ContentView`: Implements Instruction.md section "Home Screen – Dream Dashboard" with the hero CTA, last dream preview (color palette, duration, REM), and history list.
-- `SleepTrackingView`: Recreates the layout described in APPLE_WATCH_INTEGRATION.md with status badge, timers, HR/HRV indicators, and AI processing banner.
-- `DreamDetailView`: Aligns with the doc's post-sleep expectations by showing visualization controls, heart-rate/HRV charts (`HeartRateChartView`, `HRVChartView`), biosignal summary, AI interpretation card, and notes.
-- `AIEnhancedVisualizationView` & fallback `DreamVisualizationView`: Translate AI_DREAM_GUIDE.md's art direction—mood-based gradients, particle systems, symbolic orbs, theme tags, intensity/lucidity indicators—into live SwiftUI animations.
+## 1. Flow conformance
 
-## 5. AI Interpretation Pipeline
-- `AIDreamService` builds the structured prompt defined in AI_DREAM_GUIDE.md (explicit instructions about mood, themes, visual prompt, intensity, consciousness, symbolism).
-- Provider modes:
-  - **OpenAI**: Calls `gpt-4o-mini` with `response_format: json_object`, matching configuration directions. Requires API key injection (via `AIConfig.apiKey`).
-  - **Anthropic**: Targets `claude-3-5-sonnet-20241022`, enforces JSON-only replies, and obeys header requirements.
-  - **Local fallback**: Mirrors the guide's heuristic rules (HRV/movement thresholds) to ensure offline functionality.
-- Results populate `SleepData` so downstream views render narratives, tags, and metrics without additional formatting code.
+| Vision step | Implementation | Verdict |
+| --- | --- | --- |
+| Pre-sleep: arm Dream Mode from the phone | `DreamDashboardView` → `SleepTrackingView` | ✅ matches |
+| Watch collects while the phone rests | `WorkoutManager` + `HKWorkoutSession` | ✅ matches |
+| Data syncs during the night | `PhoneWatchConnectivityManager`, 5 s cadence | ✅ exceeds — the vision assumed 5 minutes |
+| Morning: stop from either device | Bidirectional, with state reconciliation | ✅ matches |
+| Symbolic interpretation of the night | `AIDreamService` | ❌ **stub, randomised** |
+| Short generated film | `DreamFilmRenderer` produces a real MP4 | ✅ **exceeds the vision** |
+| Soundscape from bio rhythm | `DreamScoreRenderer` produces a real score | ✅ **exceeds the vision** |
+| Journal with notes and titles | Not implemented | ❌ |
+| Private social feed / Dream Gallery | Not implemented | ❌ deliberately deferred |
 
-## 6. Charts & Visualization
-- `HeartRateChartView` and `HRVChartView` implement the timeline visuals promised in APPLE_WATCH_INTEGRATION.md: gradient line + area charts, average/min/max stats, selectable points, and empty state messaging for watchless sessions.
-- Visualization previews honor mood-based palettes from `SleepData.generateDreamColors`, keeping Instruction.md's "dream trends" and AI guide themes cohesive.
+---
 
-## 7. Conformance Gaps & Next Steps
-- **Ambient sound analysis**: Instruction.md mentions ambient noise capture; the model stores `ambientNoiseLevel` but no recorder currently feeds it. Bridge with AVAudioEngine or reuse HealthKit environmental audio APIs.
-- **Movement & REM sourcing**: Watch integration now streams HR/HRV only; movement intensity and sleep stages are still simulated. Integrate accelerometer / motion samples and, when available, `HKCategoryType.sleepAnalysis` to replace random values.
-- **Visualization rendering**: Instruction.md envisions video generation (Metal / SceneKit). Current implementation delivers particle-based SwiftUI animation—sufficient for MVP but not full "AI animation" yet.
-- **Watch app install detection**: Due to packaging quirks noted in Instruction.md (appex wrapper), `WatchConnectivityManager` assumes installation when reachable. Once the bundle embedding is finalized, revisit the detection logic to rely on `session.isWatchAppInstalled`.
-- **AI provider defaults**: `AIDreamService` initializer currently defaults to `.openAI`. Ensure the production entry point instantiates with `AIConfig.defaultProvider` to keep the local-first behavior promoted in AI_DREAM_GUIDE.md.
-- **HealthKit authorization states**: `WorkoutManager` logs errors but does not surface them to the Watch UI. Consider piping failures to `ContentView`'s alert flow so users understand why HR remains zero.
+## 2. Data model mapping
 
-## 8. Testing & Operational Notes
-- Latest watchOS build (Watch Ultra 3 target) succeeded via `xcodebuild` after simplifying the Watch UI, aligning with WATCH_APP_SETUP.md troubleshooting steps.
-- Install & launch scripts (`build_watch.sh`, `install_watch_app.sh`, etc.) remain available for manual deployment, but the connectivity layer now allows on-device start/stop flows per documentation.
+`SleepData` carries every metric the vision called for — duration, heart rate, HRV,
+movement, REM %, deep %, ambient noise — plus the AI augmentation fields and a
+`REMDreamProfile`.
 
-This document should stay alongside the specification files in `Doc/` to keep the living codebase and design doctrine synchronized.
+`BiosignalDataPoint` captures twelve signals per sample, considerably more than the
+three the vision assumed.
+
+**Divergence:** both are plain `Codable` structs. The vision and earlier docs
+assumed SwiftData `@Model` entities with cascade relationships. That code does not
+exist, and consequently **nothing is persisted**.
+
+---
+
+## 3. Watch integration chain
+
+- `WatchSideConnectivityManager` activates `WCSession`, reports reachability and
+  install state, and pushes snapshots.
+- `RemoteCommandStore` queues commands that arrive while the extension is
+  suspended and schedules a `WKExtension` background refresh to drain them. This
+  was not anticipated by the vision but proved necessary.
+- `WorkoutManager` holds a `WKExtendedRuntimeSession` and persists session state
+  to `UserDefaults` so an app relaunch resumes rather than loses the night.
+- `reconcilePhoneControlState` resolves disagreements between the two devices.
+
+---
+
+## 4. iPhone surfaces
+
+| Vision screen | Implementation |
+| --- | --- |
+| Dream Dashboard | `DreamDashboardView` — hero CTA, last dream, history |
+| Dream Playback | `DreamVideoView` — AVPlayer, scene pager, waveform |
+| Dream Journal | ❌ not implemented |
+| Dream Gallery | ❌ deliberately deferred |
+
+`SleepTrackingView` and `DreamDetailView` use paged multi-metric charts
+(`MultiMetricChart`) rather than the separate heart-rate and HRV charts the earlier
+docs described. `HeartRateChartView` and `HRVChartView` never existed.
+
+---
+
+## 5. Interpretation pipeline
+
+The vision described an on-device model producing a symbolic reading of the night.
+
+What exists: `AIDreamService.interpret(session:)` accepts the fully analysed
+`SleepSession`, **ignores it**, and returns randomised values plus one of six
+hardcoded narrative strings.
+
+No cloud provider was ever integrated despite earlier documentation claiming
+OpenAI and Anthropic support. Those claims have been removed from all documents.
+
+The planned replacement is an on-device engine — Apple Foundation Models with a
+deterministic biosignal heuristic fallback. Cloud providers are explicitly ruled
+out because per-user API cost is incompatible with one-time pricing. See
+[PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) §1.
+
+---
+
+## 6. Media generation
+
+The vision asked for a 10–30 second abstract animation rendered with Metal or
+SceneKit, plus a soundscape.
+
+What exists is more ambitious and built differently:
+
+- A full H.264 MP4 via `AVAssetWriter` and CoreGraphics — no Metal, no SceneKit
+- Six visual styles paired 1:1 with six musical genres
+- An original score from a hand-written synthesiser, phrase-aligned to REM segments
+- Deterministic seeding so a given night always renders identically
+
+Duration is derived from the REM profile rather than fixed at 10–30 seconds.
+
+---
+
+## 7. Conformance gaps
+
+### 7.1 Closed since the last review
+
+| Former gap | Resolution |
+| --- | --- |
+| Ambient sound never captured | `environmentalAudioExposure` now feeds `noiseExposure` |
+| Movement simulated | Real movement data drives REM segmentation |
+| REM stages simulated | `REMClassifier` — real, rule-based, unit tested |
+| Visualisation was particles only | Real MP4 film generation |
+| No soundtrack | Real score generation |
+| Watch install detection unreliable | Reachability and install state now reported explicitly |
+| AI provider default inconsistency | Moot — no providers exist |
+
+### 7.2 Open
+
+| Gap | Severity | Notes |
+| --- | --- | --- |
+| **No persistence** | 🔴 blocker | In-memory store seeded with two mocks; every session is lost on relaunch |
+| **Narrative engine is a stub** | 🔴 blocker | Output unrelated to the user's sleep |
+| **HealthKit entitlement missing** | 🔴 blocker | No `.entitlements` file for any target |
+| **No `PrivacyInfo.xcprivacy`** | 🔴 blocker | Upload rejected by App Store Connect |
+| **No `UIBackgroundModes`** | 🔴 blocker | Overnight sessions terminated by the system |
+| iOS target lacks HealthKit usage strings | 🔴 blocker | Runtime crash on first HealthKit call |
+| HealthKit auth failures invisible to the user | 🟠 | `WorkoutManager` only `print`s errors |
+| No notifications | 🟠 | The vision's morning payoff moment is missing |
+| Rendered film never shareable | 🟠 | File exists on disk, no UI exposes it |
+| Heuristic "risk" metrics imply clinical meaning | 🟠 | Rejection risk under Guidelines 1.4.1 / 5.1.3 |
+| No journal, search, trends or insights | 🟡 | Blocked by the persistence gap |
+| No settings, onboarding or empty states | 🟡 | |
+| Media cache has no eviction policy | 🟡 | Unbounded disk growth |
+| `Item.swift` template leftover | 🟡 | Dead SwiftData model, should be deleted |
+| No localization | 🟡 | Strings hardcoded in views |
+| Overnight battery unmeasured | 🔴 risk | Target <15%, never validated on hardware |
+
+Full remediation list: [APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md).
+
+---
+
+## 8. Testing
+
+Roughly 1 250 lines of unit tests across seven files cover the score, the film
+profile derivation, the composer, session lifecycle and the REM classifier.
+
+```bash
+./run-tests.sh              # unit tests + watchOS compile check
+./run-tests.sh --watch      # sleep-staging suite only
+./run-tests.sh --all        # unit and UI tests
+```
+
+Not covered: connectivity (requires paired hardware), HealthKit reads, battery
+behaviour, and anything overnight.
+
+---
+
+## 9. Maintenance rule
+
+This project accumulated a large gap between documentation and code — docs
+described cloud AI integrations, SwiftData persistence and view files that never
+existed, which repeatedly misled debugging.
+
+**Update [STATUS.md](STATUS.md) in the same commit that changes behaviour.**

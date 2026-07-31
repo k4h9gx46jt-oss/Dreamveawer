@@ -1,369 +1,300 @@
-# DreamWeaver Alkalmazás - Teljes Áttekintés
+# DreamWeaver — Full Product Overview
 
-## 🎯 Alapkoncepció
+> **Note on this file.** It was previously written in Hungarian. Documentation has
+> been standardised on English because the App Store listing, review
+> correspondence and any future contributors all require it. Hungarian is planned
+> as the first *in-app* localization — see
+> [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) §5.
 
-**DreamWeaver** — *"See What Your Mind Creates"*
+**Concept:** *"See What Your Mind Creates."*
 
-Egy integrált iOS + watchOS alkalmazáscsalád, amely az alvás közbeni biosignálokat művészi vizualizációvá alakítja AI segítségével.
+An iPhone + Apple Watch app family that records a night of biosignals and
+synthesises a short film and an original score from what it measured — entirely
+on-device.
 
----
-
-## 📱 Két Platform, Egy Élmény
-
-### ⌚ Apple Watch Szerepe
-**Adatgyűjtő és monitorozó eszköz**
-
-#### Funkciók:
-- 🫀 **Valós idejű pulzusmérés** (HealthKit integrációval)
-- 💓 **HRV (Heart Rate Variability) számítás** - az érzelmi intenzitás mérésére
-- 🏃 **Mozgásérzékelés** - CoreMotion accelerométer használatával
-- ⏱️ **Alváskövetés indítása/leállítása** közvetlenül az órán
-- 📡 **Automatikus szinkronizálás** iPhone-ra 5 percenként
-- 🔋 **Háttérben működő workout session** a folyamatos méréshez
-- 🌙 **Bedside Mode** - minimalista éjszakai kijelző
-
-#### Adatok amit gyűjt:
-- Pulzus (BPM) folyamatosan
-- HRV értékek
-- Mozgási adatok (testi aktivitás mértéke)
-- REM és mély alvás fázisok (becsült)
+For a shorter version see
+[DreamWeaverApp-CompleteOverview.md](DreamWeaverApp-CompleteOverview.md).
+For verified feature status see [STATUS.md](STATUS.md).
 
 ---
 
-### 📱 iPhone Szerepe
-**Fő felhasználói felület, adatelemzés és vizualizáció**
+## 1. Two platforms, one experience
 
-#### Főbb funkciók:
+### 1.1 Apple Watch — the sensor
 
-**1. Álomkövetés Indítása**
-- "Start Dream Mode" gomb
-- Apple Watch automatikus aktiválása
-- Valós idejű biosignál megjelenítés
-- Időzítő (órák:percek:másodpercek)
-- Kapcsolati státusz kijelzés (⌚ Watch Connected)
+| Capability | Status |
+| --- | --- |
+| `HKWorkoutSession` background tracking | ✅ |
+| `WKExtendedRuntimeSession` for overnight survival | ✅ |
+| Heart rate, HRV (SDNN) | ✅ real HealthKit |
+| SpO₂, respiratory rate | ✅ real HealthKit |
+| Environmental audio exposure | ✅ real HealthKit |
+| Movement / motion | ✅ |
+| Wrist temperature delta | 🟡 partly synthesised |
+| ECG confidence | 🟡 placeholder |
+| Apnea risk, hypertension risk, sleep score | 🟡 heuristics, **not clinical** |
+| Rule-based REM / deep / light staging | ✅ |
+| Start and stop from the wrist | ✅ |
+| Session restore after relaunch | ✅ `UserDefaults` |
+| Wake from a suspended extension | ✅ `RemoteCommandStore` |
+| Bedside Mode | ❌ planned |
+| Smart Wake | ❌ planned |
 
-**2. Adatfogadás és Tárolás**
-- WatchConnectivity protokoll használata
-- Biosignál idősor mentése (BiosignalDataPoint modellek)
-- SwiftData adatbázis helyi tároláshoz
-- Teljes adatvédelem - minden helyben marad
+Samples are captured every second and pushed to the phone every 5 seconds.
 
-**3. AI Álomértelmezés** ✨
-- **Automatikus feldolgozás** az alvás végeztével
-- **3 AI opció:**
-  - **OpenAI GPT-4o-mini** - kreatív narratívák
-  - **Anthropic Claude 3.5 Sonnet** - alternatív stílus
-  - **Helyi algoritmus (alapértelmezett)** - internet nélkül, teljesen privát
+### 1.2 iPhone — the analyser and renderer
 
-- **AI által generált elemek:**
-  - 🎨 Poétikus álom narratíva (2-3 mondat)
-  - 🏷️ Témák felismerése (pl. "cosmos", "transformation", "chaos")
-  - 🔮 Szimbolizmus (emojik: ⭐ csillagok, 🌊 víz, 🔥 tűz stb.)
-  - 📊 Intenzitás skála (0-1, álom élénkségének mértéke)
-  - 🧘 Tudatosság szint (0-1, lucid dreaming detektálás)
-  - 🎬 Vizuális prompt a rendereléshez
-
-**4. Álom Vizualizáció** 🌈
-- **10-30 másodperces AI-generált animáció**
-- **Dinamikus részecske rendszer** (60 részecske)
-- **Hangulat-alapú színátmenetek:**
-  - Ethereal (éteri) - halvány kékek/lilák
-  - Turbulent (viharos) - vörösek/narancsok
-  - Intense (intenzív) - élénk színek
-  - Peaceful (békés) - pasztell színek
-  - Calm (nyugodt) - hideg tónusok
-
-- **Szimbolikus központi orb** - forog, emoji ikonokkal
-- **Lebegő témacímkék** - horizontális scroll
-- **Narratíva overlay** - 2 másodperc után felcsúszik
-- **Tudatossági gyűrű** - lucid álmoknál megjelenik (>50%)
-
-**5. Álom Dashboard** (főképernyő)
-```
-┌─────────────────────────────┐
-│    DreamWeaver              │
-│    🌙 ✨                     │
-│ See What Your Mind Creates  │
-│                             │
-│  [Start Dream Mode]         │ ← Fő indító gomb
-│   Track your sleep and      │
-│   visualize your dreams     │
-│                             │
-│  Last Dream    3 days, 7hrs │
-│  ┌─────────────────────┐   │
-│  │     Peaceful         │   │ ← Színes kártya
-│  │  ⏱️ 0h 0m  🧠 23% REM │   │
-│  │        ▶️            │   │ ← Lejátszás
-│  └─────────────────────┘   │
-│                             │
-│  Dream History              │
-│  ┌───────────────────────┐ │
-│  │ Peaceful               │ │
-│  │ ⏱️ 0h 0m • 9 Nov 2025  │ │
-│  └───────────────────────┘ │
-└─────────────────────────────┘
-```
-
-**6. Részletes Álom Nézet**
-- Teljes biosignál grafikonok
-- **Pulzus idősor** (line chart + area fill)
-- **HRV trend** (külön diagram)
-- Statisztikák (átlag/min/max)
-- AI értelmezés teljes szövege
-- Témacímkék (kattintható pilulák)
-- Intenzitás és tudatosság progress bar-ok
-- "Play Dream Visualization" gomb
-
-**7. Álom Napló**
-- Lista nézet minden álomról
-- Miniatűr előnézetek
-- Kereshető témák és érzések szerint
-- AI insights: *"Ismétlődő nyugodt álmaid vannak szerdánként edzés után"*
+| Capability | Status |
+| --- | --- |
+| Start / stop Dream Mode | ✅ |
+| Live biosignal display and timer | ✅ |
+| Watch connection status | ✅ |
+| Sample ingestion via WatchConnectivity | ✅ |
+| REM segmentation into a `REMDreamProfile` | ✅ |
+| **MP4 dream film generation** | ✅ |
+| **Original score generation** | ✅ |
+| Multi-metric charts | ✅ |
+| Dream detail view | ✅ |
+| Dream film player with scene pager and waveform | ✅ |
+| Dream dashboard and history list | ✅ |
+| Narrative / theme / symbolism generation | 🟡 **stub, randomised** |
+| Persistence | ❌ **none** |
+| Journal search, trends, insights | ❌ |
+| Settings, onboarding, notifications | ❌ |
+| Share the rendered film | ❌ text narrative only |
+| Localization | ❌ English only |
 
 ---
 
-## 🧠 Technológiai Stack
+## 2. Technology stack
 
-| Réteg | Technológia |
-|-------|-------------|
-| **Biosignálok** | HealthKit, CoreMotion, Apple Watch szenzrok |
-| **Adatgyűjtés** | WatchConnectivity (Bluetooth), WorkoutSession |
-| **Adattárolás** | SwiftData (@Model), helyi adatbázis |
-| **AI Értelmezés** | OpenAI API / Anthropic API / Helyi ML |
-| **Vizualizáció** | SwiftUI Charts, Metal, SceneKit |
-| **Részecske rendszer** | Custom particle engine 60 objektummal |
-| **Hangulatelemzés** | HRV + mozgás + REM/Deep sleep arány algoritmus |
+| Layer | Implementation |
+| --- | --- |
+| Biosignals | HealthKit, `HKWorkoutSession`, `HKLiveWorkoutBuilder` |
+| Watch runtime | `WKExtendedRuntimeSession`, `WKExtension` background refresh |
+| Transport | WatchConnectivity — messages, application context, batch backfill |
+| Sleep staging | Rule-based thresholds on heart rate and HRV |
+| Storage | ❌ none — in-memory only |
+| Narrative | 🟡 stub |
+| Film | AVFoundation `AVAssetWriter` + CoreGraphics, procedural |
+| Score | Custom DSP synthesiser |
+| UI | SwiftUI, Swift Charts |
 
----
-
-## 🔄 Munkafolyamat (User Flow)
-
-### 1️⃣ **Lefekvés Előtt**
-```
-Felhasználó → Megnyitja az appot iPhone-on
-           → "Start Dream Mode" gomb megnyomása
-           → Apple Watch automatikusan elindul
-           → iPhone az éjjeliszekrényen marad
-           → Watch a csukló közelében folyamatosan mér
-```
-
-### 2️⃣ **Alvás Közben**
-```
-Apple Watch → Pulzus mérés (folyamatos)
-           → HRV számítás
-           → Mozgás detektálás (accelerometer)
-           → Adatok 5 percenként iPhone-ra
-           
-iPhone     → Adatok fogadása WatchConnectivity-vel
-           → BiosignalDataPoint tárolás SwiftData-ban
-           → Környezeti zaj elemzés (opcionális, Core Audio ML)
-           → Háttérben fut, képernyő kikapcsolva
-```
-
-### 3️⃣ **Reggel (Felébredés)**
-```
-Felhasználó → "Stop Tracking" gomb (iPhone vagy Watch)
-           → AI feldolgozás automatikusan indul
-           → Loading indicator jelenik meg
-           
-AI Engine  → Biosignálok elemzése
-           → Hangulat klasszifikáció (Peaceful/Chaotic/Intense/Calm)
-           → Narratíva generálás (2-3 mondat)
-           → Témák és szimbólumok azonosítása
-           → Vizuális prompt készítés
-           
-App        → Álom kártya hozzáadása a történethez
-           → Push notification: "Your dream is ready! 🌙"
-```
-
-### 4️⃣ **Álom Megtekintése**
-```
-Felhasználó → Álom kártyára kattintás
-           → Részletes nézet megnyitása
-           → Pulzus/HRV grafikonok böngészése
-           → AI narratíva olvasása
-           → "Play Dream Visualization" gomb
-           
-Vizualizáció → 10-30 mp animáció
-            → Részecskék mozgása (AI intenzitás szerint)
-            → Színátmenetek (hangulat szerint)
-            → Szimbolikus orb emoji ikonokkal
-            → Narratíva szöveg overlay
-            → Opció: újragenerálás, mentés, megosztás
-```
+**No third-party dependencies of any kind.** No Metal, no SceneKit, no diffusion
+model, no networking code.
 
 ---
 
-## 🎨 Design Elemek
+## 3. User flow
 
-### iPhone App Ikonjai
-- 🌙 Hold + ✨ Csillagok
-- 🫀 Szív (pulzusmérés)
-- 📊 Grafikonok
-- 🎨 Festő ecsetek (álom mint művészet)
-- 🔮 Kristálygömb (szimbolikus)
+### 3.1 Before bed
 
-### Apple Watch App UI
-```
-┌─────────────────┐
-│  🌙 DreamWeaver │
-│   Tracking...   │
-│                 │
-│   ❤️ 62 BPM     │ ← Valós idejű pulzus
-│   💓 45 ms      │ ← HRV
-│                 │
-│   03:25:14      │ ← Időzítő
-│                 │
-│ 📡 Syncing to   │
-│    iPhone       │
-│                 │
-│    [Stop]       │
-└─────────────────┘
+The user opens the app on either device and starts Dream Mode. If started from the
+iPhone, the watch begins tracking even when its app is closed — the command is
+queued and a background refresh is scheduled.
+
+### 3.2 During sleep
+
+```mermaid
+graph LR
+    A[HealthKit sensors] --> B[WorkoutManager<br/>1 s sampling]
+    B --> C[REMClassifier<br/>light / deep / rem]
+    B --> D[Push every 5 s]
+    D --> E[iPhone<br/>PhoneWatchConnectivityManager]
+    E --> F[SleepSession.biosignals]
 ```
 
-### Színpaletta
-- **Háttér:** Sötét gradiens (lila → fekete)
-- **Peaceful álmok:** Kék, türkiz, ezüst
-- **Chaotic álmok:** Vörös, narancs, sárga
-- **Intense álmok:** Élénk magenta, kék, zöld
-- **Calm álmok:** Pasztell rózsaszín, halványkék
+If the phone is unreachable, samples accumulate on the watch and are delivered as
+a batch on reconnection, or via application context.
+
+### 3.3 On waking
+
+Stop from either device. The session is finalised, averages are recomputed, and
+`analyzeREMProfile()` buckets the samples into 60-second windows, keeping only
+those with `movement <= 0.45`. Each window becomes a `REMSegment` with an
+intensity score, a mood polarity and a dominant driver
+(`heartRate`, `hrv`, `apnea`, `noise`, `temperature`).
+
+### 3.4 Generation
+
+1. A narrative is produced — **currently randomised, not derived from the data**.
+2. `DreamMediaComposer` builds a `DreamMediaPrompt` from the REM profile.
+3. A `DreamScoreProfile` selects tempo, genre and phrase structure.
+4. `DreamScoreRenderer` synthesises a 44.1 kHz stereo CAF.
+5. `DreamFilmRenderer` writes an H.264 MP4 at 1280×720, 30 fps.
+6. The result is cached on disk by dream UUID.
+
+### 3.5 Viewing
+
+The dream card opens a detail view with paged multi-metric charts, the narrative,
+theme tags, and intensity/lucidity bars. From there the film plays with its score
+and a live waveform.
+
+> **Note:** there is no "your dream is ready" notification — no notification code
+> exists in the project. It is planned.
 
 ---
 
-## 🔐 Adatvédelem & Biztonság
+## 4. Dream media engine
 
-### Alapelvek:
-- ✅ **Minden adat lokálisan tárolva** (iPhone SwiftData)
-- ✅ **Nincs felhő szinkronizálás** alapértelmezetten
-- ✅ **HealthKit engedélykérés** átlátható
-- ✅ **AI API-k opcionálisak** - helyi mód mindig működik
-- ✅ **Titkosítás** nyugalmi állapotban (iOS encryption)
-- ✅ **Törölhető adatok** - felhasználó ellenőrzése alatt
+The most developed part of the project, and the product's actual differentiator.
 
-### Mit KÜLD az AI-nak (ha engedélyezett):
-- Alvás időtartama
-- Átlagos pulzus & HRV
-- Mozgás százalék
-- REM & mély alvás százalék
-- Zajszint
-- Hangulat klasszifikáció
+### 4.1 Genre and visual style
 
-### Mit NEM küld:
-- Név, személyes azonosítók
-- Helyadatok
-- Fotók, képek
-- Korábbi álomtörténet
-- Egyéb app adatok
+Picture and score are always selected together so they agree:
 
----
+| `DreamGenre` | `DreamVisualProfile.Style` | Character |
+| --- | --- | --- |
+| `symphonic` | `auroraCathedral` | Broad, layered, luminous curtains |
+| `chamber` | `pastoralDrift` | Intimate, warm, slow drift |
+| `celestial` | `stellarNebula` | Sparse, cold, deep-space |
+| `cinematic` | `stormHorizon` | Wide dynamics, weather fronts |
+| `hardRock` | `emberTempest` | Driven, hot, high contrast |
+| `industrial` | `fracture` | Percussive, glitched, fragmented |
 
-## 🚀 Fejlesztési Prioritások
+### 4.2 Score
 
-### ✅ Már Kész (Fázis 1-2)
-- iPhone alapalkalmazás
-- SwiftData modellek
-- Álom dashboard UI
-- Részecske animációs motor
-- AI integráció (OpenAI/Anthropic/Helyi)
-- WatchConnectivity alap
+A hand-written synthesiser — oscillators, a resonant low-pass filter, one-pole
+filters for cabinet and body simulation, and a ping-pong delay. Tempo derives from
+average heart rate; phrase boundaries align to REM segments. No sample libraries.
 
-### 🚧 Folyamatban (Fázis 3-4)
-- Apple Watch app finomítása
-- HealthKit teljes implementáció
-- Valós biosignál gyűjtés
-- Háttér workout session
-- Grafikonok optimalizálása
+### 4.3 Film
 
-### 🔮 Jövőbeli Funkciók (Fázis 5-6)
-- **Bedside Mode** (Watch minimalista UI)
-- **Okos ébresztő** - könnyű alvási fázisban
-- **Hangszimfónia** - biorhythm alapú zenei generálás
-- **Álom Galéria** - közösségi réteg (opcionális)
-- **Trend analízis** - hónapok/évek adatai
-- **Export PDF** - álomnapló nyomtathatóan
-- **Videó megosztás** - vizualizációk TikTok/Instagram-ra
-- **Hangos narráció** - AI felolvassa az álmot
+`DreamVisualProfile` exposes roughly 25 parameters — ribbons, nebula layers, stars,
+particles, bokeh, rays, curtains, comets, flare, chroma edge, pulse, shake, glitch,
+grain, vignette, warmth. A seeded `DreamRandom` varies them per dream, so the same
+night always renders identically while different nights diverge.
+
+This is **procedural synthesis, not a generative image model.**
+
+### 4.4 Mood palette
+
+`DreamMood` drives colour: `peaceful`, `calm`, `intense`, `turbulent`, `chaotic`,
+`ethereal`.
 
 ---
 
-## 💡 Kulcs Innovációk
+## 5. Design language
 
-1. **Biosignálok → Művészet transzformáció**
-   - Nem csak grafikonok, hanem élő, mozgó vizualizáció
-
-2. **Személyre szabott AI**
-   - Hosszú távon tanulja a felhasználó álommintáit
-
-3. **Két eszköz, egy élmény**
-   - Watch = érzékelő, iPhone = értelmező + megjelenítő
-
-4. **Teljes adatvédelem**
-   - Helyi AI mód = zero cloud dependency
-
-5. **Tudományos alapok**
-   - HRV ↔ Érzelmi állapot korreláció
-   - REM fázis ↔ Élénk álmok összefüggése
-   - Mozgás ↔ Narratív változékonyság
+- Dark gradient backgrounds
+- Mood-specific palettes
+- Calligraphic wordmark (Great Vibes) on both platforms
+- Paged charts rather than dense dashboards
+- Watch UI reduced to live vitals, a timer and a single action
 
 ---
 
-## 📊 Technikai Kihívások & Megoldások
+## 6. Privacy
 
-| Kihívás | Megoldás |
-|---------|----------|
-| Watch szimulátor nem támogatja HealthKit-et | Fizikai eszköz tesztelés szükséges |
-| Akkumulátor fogyás éjszaka | 5 perces mintavétel, optimalizált workout session |
-| AI API költség | Helyi fallback mindig elérhető |
-| Részecske renderelés teljesítmény | Metal gyorsítás, max 60 particle limit |
-| WatchConnectivity megszakadás | Context update háttérben, újraküldési logika |
+**Nothing leaves the device.** There is no networking code, no analytics SDK and no
+account system anywhere in the project. HealthKit data is read on the watch,
+transferred over the encrypted WatchConnectivity link, and processed on the phone.
 
----
+This is a deliberate product decision. It is also what makes a one-time purchase
+price viable — there is no per-user marginal cost to fund. See
+[PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) §1.
 
-## 🎯 Sikermetrikák
+> Previous revisions claimed "SwiftData encryption at rest" and optional cloud AI
+> providers. Neither exists: there is no persistence layer at all, and no AI
+> provider integration has ever been written.
 
-- ✅ Pontosság: ±5 BPM pulzusmérés
-- ✅ Akkumulátor: <15% fogyás éjszaka
-- ✅ Szinkronizáció: 95%+ megbízhatóság
-- ✅ Felhasználói elégedettség: >4.5⭐
-- ✅ Stabilitás: 0 crash éjszakai követésnél
+**Still to build:** user-controlled data deletion and export. The privacy promise
+is not fully deliverable until those exist — and under GDPR they are mandatory for
+an EU release.
 
 ---
 
-## 📂 Projekt Struktúra
+## 7. Development status
+
+### Complete
+
+- Bidirectional watch↔phone control including suspended-app wake
+- Twelve biosignals from HealthKit
+- Rule-based REM staging, unit tested
+- MP4 film generation, six visual styles
+- Original score generation, six genres
+- Charts, detail view, film player
+- ~1 250 lines of unit tests
+- Calligraphic branding on both platforms
+
+### Blockers
+
+| Blocker | Consequence |
+| --- | --- |
+| No persistence | All recorded sessions lost on relaunch |
+| Narrative engine is a stub | Text unrelated to the user's sleep |
+| HealthKit entitlement missing | Authorization fails on hardware |
+| No privacy manifest | Upload rejected by App Store Connect |
+| No `UIBackgroundModes` | Overnight sessions terminated |
+| Mock dreams seeded into the store | Users see dreams they never recorded |
+
+### Planned
+
+Bedside Mode · Smart Wake · lucid dream training · dream voice journal · dream
+fingerprint · Year in Review · trend analysis · PDF export · film and soundtrack
+sharing · voice narration · widgets and complications · Health write-back ·
+localization.
+
+Detail and sequencing: [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md).
+
+---
+
+## 8. Key innovations
+
+1. **Biosignals become art** — not charts, but a rendered film with a matching score.
+2. **Deterministic uniqueness** — seeded per dream, so it is reproducible yet personal.
+3. **Two devices, one experience** — either can drive the session.
+4. **Genuinely offline** — zero dependencies, zero network calls.
+5. **Grounded in physiology** — HRV↔emotional state, REM↔vivid dreaming,
+   movement↔narrative variability.
+
+---
+
+## 9. Challenges
+
+| Challenge | Position |
+| --- | --- |
+| Simulators provide no real HealthKit data | Physical device testing mandatory |
+| Overnight battery drain | **Unmeasured**; adaptive sampling planned |
+| Render performance on older hardware | Unprofiled |
+| WatchConnectivity drop-outs | Handled via context + batch backfill |
+| Media cache growth | No eviction policy yet |
+| Heuristic "risk" metric naming | Must be reframed before submission |
+
+---
+
+## 10. Success metrics
+
+| Metric | Target | Measured? |
+| --- | --- | --- |
+| Heart-rate accuracy | ±5 bpm | ❌ |
+| Overnight watch battery drain | <15% | ❌ **highest risk** |
+| Sync reliability | ≥95% | ❌ |
+| Overnight crashes | 0 | ❌ |
+| App Store rating | ≥4.5★ | ❌ |
+
+---
+
+## 11. Project structure
 
 ```
-DreamWeaver/
-├── DreamWeaver (iPhone App)/
-│   ├── Models/
-│   │   ├── SleepData.swift
-│   │   ├── BiosignalDataPoint.swift
-│   │   └── DreamMood.swift
-│   ├── Views/
-│   │   ├── ContentView.swift
-│   │   ├── DreamDashboardView.swift
-│   │   ├── SleepTrackingView.swift
-│   │   ├── DreamDetailView.swift
-│   │   ├── DreamVisualizationView.swift
-│   │   └── HeartRateChartView.swift
-│   ├── Services/
-│   │   ├── WatchConnectivityManager.swift
-│   │   ├── AIDreamService.swift
-│   │   ├── HealthKitManager.swift
-│   │   └── ParticleEngine.swift
-│   └── Resources/
-│       └── Assets.xcassets
-│
-└── DreamWeaverWatch (watchOS App)/
-    ├── Views/
-    │   ├── ContentView.swift
-    │   └── SleepTrackingView.swift
-    ├── Managers/
-    │   ├── WorkoutManager.swift
-    │   └── WatchConnectivityManager.swift
-    └── Resources/
-        └── Assets.xcassets
+Dreamweaver/
+├── Shared/
+│   └── REMClassifier.swift          compiled into both targets
+├── Ihpone/
+│   ├── Models/                      SleepData, BiosignalDataPoint, DreamMood,
+│   │                                SleepDataStore, REMWindow
+│   ├── Services/                    DreamMediaComposer, DreamFilmRenderer,
+│   │                                WatchConnectivityManager, AIDreamService,
+│   │                                HealthKitManager, ParticleEngine
+│   ├── Views/                       Dashboard, tracking, detail, video, components
+│   └── DreamWeaver/                 Xcode project + test targets
+├── Iwatch/
+│   ├── Managers/                    WorkoutManager, WatchConnectivityManager,
+│   │                                RemoteCommandStore
+│   ├── Views/                       WatchContentView, DreamWeaverWordmark
+│   └── ExtensionDelegate.swift
+└── Doc/
 ```
 
----
-
-**Ez a DreamWeaver - ahol az álmok művészetté válnak! 🌙✨**
+Full module map: [ARCHITECTURE.md](ARCHITECTURE.md).

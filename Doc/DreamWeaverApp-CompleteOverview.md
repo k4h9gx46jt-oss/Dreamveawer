@@ -1,38 +1,142 @@
-🎯 Core Concept
-DreamWeaver — “See What Your Mind Creates.”
-An integrated iOS + watchOS app family that turns sleep biosignals into artistic visualizations with AI.
-📱 Two Platforms, One Experience
-Apple Watch role (data collector/monitor): real-time heart rate, HRV, motion via CoreMotion, start/stop sleep tracking, auto-sync to iPhone every 5 minutes, background workout session, bedside mode. Captured data: heart rate, HRV, motion, estimated REM & deep sleep phases.
-iPhone role (primary UI + analysis/visualization): Start Dream Mode, live biosignal view, timer, watch connection status; receive & store biosignal timelines via WatchConnectivity/SwiftData; automatic AI interpretation with three options (OpenAI GPT-4o-mini, Anthropic Claude 3.5 Sonnet, local algorithm) generating narratives, themes,symbolism, intensity, consciousness, visual prompts; AI dream visualization (10–30 s animation, particle system, mood-based gradients, symbolic orb, floating tags, narrative overlay, lucid-awareness ring); Dream Dashboard layout; detailed dream view with graphs/stats/AI data; dream journal list with search and insights.
+# DreamWeaver — Executive Summary
 
-🧠 Technology Stack
-Biosignals: HealthKit/CoreMotion; Data collection: WatchConnectivity + WorkoutSession; Storage: SwiftData; AI: OpenAI/Anthropic/local ML; Visualization: SwiftUI Charts, Metal, SceneKit; Particle engine (60 objects);Mood analysis from HRV/motion/REM ratios.
+**One-paragraph version:** DreamWeaver is an iPhone + Apple Watch app that records
+a night of biosignals, detects REM windows, and synthesises a short film and an
+original score from what it measured. Everything runs on-device. The intended
+business model is a one-time premium purchase, not a subscription.
 
-🔄 User Flow
+For detail, start with [STATUS.md](STATUS.md).
 
-Before bed: open iPhone app, tap Start Dream Mode, watch starts, phone stays on nightstand.
-During sleep: watch records HR/HRV/motion, syncs every 5 min; iPhone receives via WatchConnectivity, stores biosignals, optionally analyzes ambient noise.
-Morning: user taps Stop on phone or watch; AI processing kicks in, generates mood/narrative/themes/etc., adds dream card, sends “Your dream is ready!” notification.Viewing: user opens dream card, sees charts + AI text, plays 10–30 s visualization with mood-specific colors/particles/symbols, can regenerate/save/share.
-🎨 Design Elements
-iPhone icons (moon, heart, charts, brush, crystal ball).
-Watch UI mock: live HR/HRV, timer, syncing indicator, Stop button.
-Color palette: dark gradient background; mood-specific colors.
+---
 
-🔐 Privacy & Security
-All data local (SwiftData), no cloud sync by default, transparent HealthKit permission, AI APIs optional with local fallback, on-device encryption, user-controlled deletion.Sent-to-AI data limited to aggregate sleep stats; no personal identifiers or media.
+## Positioning
 
-🚀 Development Priorities
-Done: base iPhone app, SwiftData models, dashboard UI, particle engine, AI integration, basic WatchConnectivity.
-In progress: watch app refinement, full HealthKit, real biosignal capture, background workout, chart optimization.
-Future: Bedside Mode, smart alarm, bio-rhythm audio, dream gallery/community, long-term trends, PDF export, video sharing, audio narration.
-💡 Key Innovations
-Biosignals→art transformation; personalized AI; unified phone/watch experience; privacy-first local AI option; science-backed metrics (HRV↔emotion, REM↔vivid dreams, motion↔narrative).
+DreamWeaver is **not** a sleep tracker. It does not compete with AutoSleep, Pillow
+or Apple's Sleep app on accuracy and would lose that fight. It is an instrument
+that turns physiology into a keepable artifact.
 
-📊 Technical Challenges
-Simulator lacks HealthKit (need physical device), battery usage (optimize sampling/workout), AI cost (local fallback), particle performance (Metal, 60 object cap), WatchConnectivity drops (context updates + retry logic).
+> *"Your mind paints while you sleep. DreamWeaver reveals the masterpiece."*
 
-🎯 Success Metrics
-±5 BPM accuracy, <15 % overnight battery drain, ≥95 % sync reliability, >4.5★ satisfaction, zero crashes overnight.
+---
 
-📂 Project Structure
-Tree showing iPhone app (models/views/services/resources) and watch app (views/managers/resources).
+## How it works
+
+| Stage | Device | What happens |
+| --- | --- | --- |
+| Before bed | iPhone or Watch | Start Dream Mode from either device |
+| Overnight | Watch | `HKWorkoutSession` records 12 biosignals; samples stream to the phone every 5 s |
+| Overnight | Watch | `REMClassifier` labels each sample light / deep / REM |
+| On waking | Either | Stop from either device; both stay in sync |
+| Morning | iPhone | REM segments are aggregated into a `REMDreamProfile` |
+| Morning | iPhone | A narrative is generated (currently a stub — see below) |
+| Morning | iPhone | An MP4 film and a matching score are rendered from the profile |
+
+---
+
+## What works today
+
+- Bidirectional Watch↔iPhone control, including waking a suspended watch app
+- Twelve biosignals captured from HealthKit
+- Rule-based REM/deep/light staging, unit tested
+- **MP4 film generation** — AVAssetWriter, H.264, 1280×720 @ 30 fps, six visual styles
+- **Original score generation** — hand-written synthesiser, 44.1 kHz stereo, six genres
+- Picture and score are always chosen together so they agree
+- Deterministic per-dream seeding: the same night always renders the same way
+- Multi-metric charts, dream detail view, film player with waveform
+- ~1 250 lines of unit tests
+
+## What does not work today
+
+| Gap | Impact |
+| --- | --- |
+| **No persistence** | Every recorded session is lost on relaunch. The app ships with two fabricated mock dreams |
+| **Narrative engine is a stub** | Text is randomly selected and unrelated to the user's actual sleep |
+| **HealthKit entitlement missing** | Authorization fails on real hardware |
+| No settings, onboarding, notifications, search, trends, localization | |
+| The rendered film is never shareable | The MP4 exists on disk but no UI exposes it |
+
+---
+
+## Technology
+
+| Layer | Implementation |
+| --- | --- |
+| Biosignals | HealthKit, `HKWorkoutSession`, `HKLiveWorkoutBuilder` |
+| Watch runtime | `WKExtendedRuntimeSession`, background refresh, `UserDefaults` restore |
+| Transport | WatchConnectivity — messages, application context, batch backfill |
+| Sleep staging | Rule-based thresholds on heart rate and HRV |
+| Storage | ❌ none |
+| Narrative | 🟡 stub |
+| Film | AVFoundation + CoreGraphics, procedural |
+| Score | Custom DSP — oscillators, resonant low-pass, one-pole filters, ping-pong delay |
+| UI | SwiftUI, Swift Charts |
+
+**Zero third-party dependencies.** No SPM, CocoaPods or Carthage. This keeps the
+privacy manifest simple and removes supply-chain risk from App Review.
+
+There is no Metal, SceneKit, or diffusion model in the project. The film renderer
+is procedural — which is what makes it fast, offline and free to run.
+
+---
+
+## Privacy
+
+Nothing leaves the device. There is no networking code anywhere in the project, no
+analytics, and no account system. This is a deliberate product decision that also
+makes one-time pricing viable — there is no per-user marginal cost to fund.
+
+---
+
+## Business model
+
+One-time purchase at **$19.99–$29.99** with Family Sharing, backed by a functional
+free tier. Rationale and the full feature plan are in
+[PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md).
+
+---
+
+## Known technical challenges
+
+| Challenge | Position |
+| --- | --- |
+| Simulators provide no real HealthKit data | Physical device testing is mandatory |
+| Overnight battery drain | **Unmeasured.** The 5 s push cadence is aggressive; adaptive sampling is planned |
+| Render performance on older hardware | Unprofiled |
+| WatchConnectivity drop-outs | Handled via application context + batch backfill |
+| Media cache growth | No eviction policy yet |
+
+---
+
+## Success metrics
+
+| Metric | Target | Measured? |
+| --- | --- | --- |
+| Heart-rate accuracy | ±5 bpm | ❌ |
+| Overnight watch battery drain | <15% | ❌ **highest risk** |
+| Sync reliability | ≥95% | ❌ |
+| Overnight crashes | 0 | ❌ |
+| App Store rating | ≥4.5★ | ❌ |
+
+---
+
+## Release readiness
+
+**Not submittable.** Blockers are enumerated in
+[APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md). The largest are: no persistence,
+no HealthKit entitlement, no privacy manifest, a stubbed narrative engine, and an
+overnight battery profile that has never been measured on hardware.
+
+---
+
+## Documents
+
+| Document | Purpose |
+| --- | --- |
+| [STATUS.md](STATUS.md) | What works today — the source of truth |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Module map and data flow |
+| [APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md) | Release gate |
+| [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) | Features, pricing, localization |
+| [DREAMWEAVER_TELJES_ATTEKINTES.md](DREAMWEAVER_TELJES_ATTEKINTES.md) | Full product overview |
+| [AI_DREAM_GUIDE.md](AI_DREAM_GUIDE.md) | Media generation pipeline |
+| [APPLE_WATCH_INTEGRATION.md](APPLE_WATCH_INTEGRATION.md) | Connectivity protocol |
+| [Instruction.md](Instruction.md) | Original vision (historical) |

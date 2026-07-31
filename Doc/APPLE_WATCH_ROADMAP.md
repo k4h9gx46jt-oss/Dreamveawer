@@ -1,327 +1,150 @@
-# Apple Watch Integration Roadmap ⌚
+# watchOS Roadmap
 
-## Overview
-This document outlines the plan to extend DreamWeaver to Apple Watch for real biosignal tracking during sleep.
+**Scope:** watchOS-specific backlog. For the product-level plan and monetization
+see [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md). For current state see
+[STATUS.md](STATUS.md).
 
-## Phase 1: HealthKit Permissions (Week 1)
-
-### Tasks
-1. **Update Info.plist**
-   ```xml
-   <key>NSHealthShareUsageDescription</key>
-   <string>DreamWeaver needs access to your heart rate and sleep data to create personalized dream visualizations.</string>
-   
-   <key>NSHealthUpdateUsageDescription</key>
-   <string>DreamWeaver will store sleep sessions in HealthKit.</string>
-   ```
-
-2. **Update Capabilities**
-   - Enable HealthKit in target capabilities
-   - Add Background Modes: Background fetch, Remote notifications
-
-3. **Request Permissions**
-   - Integrate `HealthKitManager` into `SleepTrackingView`
-   - Request authorization on first launch
-   - Show permission status in settings
-
-## Phase 2: Real-Time Data Collection (Week 2-3)
-
-### iPhone App Updates
-
-```swift
-// Update SleepTrackingView.swift
-class SleepTrackingViewModel: ObservableObject {
-    @Published var healthKitManager = HealthKitManager()
-    @Published var isTracking = false
-    @Published var currentHeartRate: Double = 0
-    @Published var heartRateHistory: [Double] = []
-    
-    func startRealTracking() {
-        // Start continuous heart rate monitoring
-        healthKitManager.startHeartRateStreaming { rate in
-            DispatchQueue.main.async {
-                self.currentHeartRate = rate
-                self.heartRateHistory.append(rate)
-            }
-        }
-    }
-}
-```
-
-### Apple Watch App Creation
-
-1. **Add watchOS Target**
-   - File > New > Target > watchOS > Watch App
-   - Name: "DreamWeaver Watch"
-
-2. **Watch App Structure**
-   ```
-   DreamWeaver Watch/
-     ContentView.swift      - Main interface
-     SleepMonitorView.swift - Bedside mode
-     WorkoutSession.swift   - Background tracking
-   ```
-
-3. **Watch ContentView**
-   ```swift
-   import SwiftUI
-   import HealthKit
-   import WatchKit
-   
-   struct ContentView: View {
-       @State private var isTracking = false
-       @State private var heartRate: Double = 0
-       
-       var body: some View {
-           VStack {
-               Text("DreamWeaver")
-                   .font(.headline)
-               
-               if isTracking {
-                   VStack {
-                       Image(systemName: "heart.fill")
-                           .foregroundColor(.red)
-                       Text("\(Int(heartRate)) BPM")
-                           .font(.title)
-                   }
-               }
-               
-               Button(isTracking ? "Stop" : "Start Sleep") {
-                   toggleTracking()
-               }
-           }
-       }
-   }
-   ```
-
-## Phase 3: Background Processing (Week 4)
-
-### Enable Background Tracking
-
-1. **Workout Session**
-   ```swift
-   import HealthKit
-   
-   class SleepWorkoutManager: NSObject, ObservableObject {
-       let healthStore = HKHealthStore()
-       var session: HKWorkoutSession?
-       var builder: HKLiveWorkoutBuilder?
-       
-       func startWorkout() {
-           let configuration = HKWorkoutConfiguration()
-           configuration.activityType = .other
-           configuration.locationType = .indoor
-           
-           do {
-               session = try HKWorkoutSession(
-                   healthStore: healthStore,
-                   configuration: configuration
-               )
-               builder = session?.associatedWorkoutBuilder()
-               
-               session?.startActivity(with: Date())
-               builder?.beginCollection(withStart: Date()) { _, _ in }
-           } catch {
-               print("Failed to start workout: \(error)")
-           }
-       }
-   }
-   ```
-
-2. **Background Delivery**
-   - Enable background delivery for heart rate
-   - Store data in shared container
-   - Sync to iPhone app
-
-## Phase 4: Watch-iPhone Communication (Week 5)
-
-### WatchConnectivity Setup
-
-```swift
-import WatchConnectivity
-
-class WatchConnectivityManager: NSObject, ObservableObject {
-    static let shared = WatchConnectivityManager()
-    
-    @Published var sleepData: [String: Any] = [:]
-    
-    override init() {
-        super.init()
-        
-        if WCSession.isSupported() {
-            let session = WCSession.default
-            session.delegate = self
-            session.activate()
-        }
-    }
-    
-    func sendSleepData(_ data: [String: Any]) {
-        guard WCSession.default.isReachable else { return }
-        
-        WCSession.default.sendMessage(data) { response in
-            print("Data sent successfully")
-        } errorHandler: { error in
-            print("Error sending data: \(error)")
-        }
-    }
-}
-
-extension WatchConnectivityManager: WCSessionDelegate {
-    // Implement required methods
-}
-```
-
-## Phase 5: Bedside Mode (Week 6)
-
-### Watch Features
-
-1. **Always-On Display**
-   - Show minimal UI during sleep
-   - Display current time
-   - Heart rate indicator
-   - Silent animations
-
-2. **Sleep Staging**
-   - Detect REM vs Deep sleep
-   - Use motion sensors + heart rate
-   - Simple ML model for classification
-
-3. **Smart Wake**
-   - Gentle haptic alarm
-   - Wake during light sleep phase
-   - Morning summary on Watch
-
-## Phase 6: Advanced Features (Week 7-8)
-
-### Motion Tracking
-```swift
-import CoreMotion
-
-class MotionManager: ObservableObject {
-    let motionManager = CMMotionManager()
-    
-    @Published var movementIntensity: Double = 0
-    
-    func startTracking() {
-        guard motionManager.isAccelerometerAvailable else { return }
-        
-        motionManager.accelerometerUpdateInterval = 1.0
-        motionManager.startAccelerometerUpdates(to: .main) { data, error in
-            guard let data = data else { return }
-            
-            let x = data.acceleration.x
-            let y = data.acceleration.y
-            let z = data.acceleration.z
-            
-            let magnitude = sqrt(x*x + y*y + z*z)
-            self.movementIntensity = magnitude
-        }
-    }
-}
-```
-
-### Ambient Sound Analysis (iPhone)
-```swift
-import AVFoundation
-
-class AudioMonitor: ObservableObject {
-    let audioEngine = AVAudioEngine()
-    
-    @Published var noiseLevel: Double = 0
-    
-    func startMonitoring() {
-        let inputNode = audioEngine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
-        
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
-            // Analyze audio buffer for volume
-            let level = self.calculateLevel(buffer)
-            DispatchQueue.main.async {
-                self.noiseLevel = level
-            }
-        }
-        
-        audioEngine.prepare()
-        try? audioEngine.start()
-    }
-}
-```
-
-## Testing Strategy
-
-### Unit Tests
-- HealthKit data parsing
-- Dream mood algorithm
-- Color generation logic
-
-### Integration Tests
-- Watch-iPhone communication
-- Background data collection
-- Data persistence
-
-### User Testing
-- Sleep with Watch for multiple nights
-- Verify accuracy of biosignals
-- Test battery life impact
-
-## Privacy & Battery Considerations
-
-### Privacy
-- All data stored locally
-- No cloud sync (unless user opts in)
-- Clear permission requests
-- Data deletion options
-
-### Battery Optimization
-- Sample heart rate every 30s (not continuous)
-- Reduce screen brightness on Watch
-- Stop tracking automatically after 12 hours
-- Efficient data processing
-
-## Success Metrics
-
-- ✅ Accurate heart rate tracking (±5 bpm)
-- ✅ Battery usage < 15% overnight
-- ✅ Reliable Watch-iPhone sync
-- ✅ User satisfaction with visualizations
-- ✅ No crashes during overnight tracking
-
-## Required Resources
-
-### Hardware
-- Apple Watch Series 4 or later (heart rate sensor)
-- iPhone 12 or later
-- Both devices charged to 100% for testing
-
-### Software
-- Xcode 15+
-- watchOS 10+
-- iOS 17+
-
-### Documentation
-- Apple HealthKit Programming Guide
-- watchOS App Programming Guide
-- WatchConnectivity Framework Reference
-
-## Timeline Summary
-
-| Week | Focus | Deliverable |
-|------|-------|-------------|
-| 1 | HealthKit Setup | Permissions working |
-| 2-3 | Watch App | Basic tracking |
-| 4 | Background Mode | All-night tracking |
-| 5 | Communication | Data sync |
-| 6 | Bedside Mode | Polished Watch UI |
-| 7-8 | Polish | Advanced features |
-
-## Next Immediate Steps
-
-1. ✅ Complete iPhone app (DONE!)
-2. → Add HealthKit permissions
-3. → Test with simulated Watch data
-4. → Create Watch app target
-5. → Implement basic heart rate tracking
+> This document previously contained an eight-week implementation plan with code
+> samples. Phases 1–4 of that plan are complete and the samples no longer match
+> the shipped implementation, so they have been replaced with a status table and a
+> forward-looking backlog.
 
 ---
 
-**Ready to bring real biosignals to your dreams!** 🌙⌚
+## 1. Completed
+
+| Item | Notes |
+| --- | --- |
+| watchOS target in the shared Xcode project | `DreamWeaver WatchKit App` + extension |
+| HealthKit authorization request | `WorkoutManager.requestAuthorization()` |
+| `HKWorkoutSession` + `HKLiveWorkoutBuilder` | `.other` / `.indoor` |
+| Live heart rate and HRV | Real HealthKit reads |
+| SpO₂, respiratory rate, environmental audio exposure | Real HealthKit reads |
+| Motion / movement capture | Feeds REM segmentation |
+| Rule-based REM/deep/light staging | `Shared/REMClassifier.swift`, unit tested |
+| Bidirectional start/stop with the iPhone | Either device can drive |
+| Live sample streaming + batch backfill | 5 s push cadence |
+| Application-context fallback when unreachable | |
+| Background wake for a suspended extension | `RemoteCommandStore` + `WKExtension` refresh |
+| `WKExtendedRuntimeSession` | Keeps the runtime alive overnight |
+| Session restore after watch app relaunch | `UserDefaults`-backed |
+| Watch UI: start/stop, live vitals, HR chart, timer | `WatchContentView` |
+| Calligraphic wordmark branding | `DreamWeaverWordmark` |
+
+---
+
+## 2. Blockers — must be fixed before any device testing
+
+| Item | Detail |
+| --- | --- |
+| **HealthKit entitlement missing** | No `.entitlements` file exists for any target. Authorization silently fails on real hardware. See [APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md) §0.1 |
+| **`UIBackgroundModes` not declared** | `workout-processing` is required or the system terminates overnight sessions |
+| **Authorization failures are invisible** | `WorkoutManager` only `print`s errors; the watch UI shows zeros with no explanation |
+
+---
+
+## 3. Battery — the highest-risk unknown
+
+The product target is **<15% overnight drain**. This has never been measured.
+
+Current configuration is aggressive:
+
+- `scheduledSampleInterval = 1` second
+- `pushInterval = 5` seconds
+- `WKExtendedRuntimeSession` held open for the whole night
+
+### Planned work
+
+1. Measure. Five full nights on physical hardware, logging battery at start and end.
+2. If drain exceeds ~20%, implement **adaptive sampling**:
+   - 30–60 s cadence while HR and HRV are stable
+   - increase only when the classifier reports REM or a disturbance
+   - batch pushes rather than streaming every 5 s
+3. Add a hard stop after 12 hours.
+4. Warn the user at session start if the watch is below ~30% charge.
+
+---
+
+## 4. Backlog
+
+### 4.1 Bedside Mode
+
+Minimal always-on display for overnight wear: dimmed clock, subtle heart-rate
+indicator, no animation. Respect always-on display budgets and Reduce Motion.
+
+### 4.2 Smart Wake
+
+Wake within a user-chosen window at the lightest detected stage, with escalating
+haptics. `REMClassifier` already provides the signal. Needs a reliable watch-side
+alarm path and a fallback when the watch is off-wrist.
+
+### 4.3 Lucid dream training
+
+REM-timed haptic cues, calibrated not to wake the sleeper. Requires an explicit
+consent flow and must be framed as an experience feature, never as therapy. See
+[PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) §2.4.
+
+### 4.4 Complications
+
+One-tap Dream Mode start from the watch face, plus a "last night" summary
+complication.
+
+### 4.5 Improved staging
+
+- Cross-check against `HKCategoryType.sleepAnalysis` where available
+- Replace fixed thresholds with a personalised baseline (each user's own resting
+  HR and HRV distribution)
+- Evaluate a small Core ML classifier once labelled data exists
+
+### 4.6 Real ECG
+
+`ecgConfidence` is currently a placeholder. Reading `HKElectrocardiogram` requires
+a Series 4+ and user-initiated capture, so this may remain a manual, on-demand
+feature rather than a passive one.
+
+### 4.7 Health app write-back
+
+Publish completed sessions as `HKCategoryTypeIdentifier.sleepAnalysis` so
+DreamWeaver data appears alongside Apple's own. Requires the HealthKit *share*
+entitlement in addition to *read*.
+
+### 4.8 Standalone watch playback
+
+Play a short version of the dream score on the watch after waking, without
+reaching for the phone.
+
+---
+
+## 5. Testing
+
+Meaningful validation requires physical hardware — Apple Watch simulators do not
+produce real HealthKit data.
+
+| Scenario | Verified |
+| --- | --- |
+| Start from iPhone, watch app closed | ❌ |
+| Start from watch, iPhone locked | ❌ |
+| Stop from either device | ❌ |
+| Airplane mode overnight, reconnect on wake | ❌ |
+| Watch battery dies mid-session | ❌ |
+| Session longer than 12 hours | ❌ |
+| HealthKit permission denied | ❌ |
+| Watch removed from wrist mid-session | ❌ |
+
+Unit-testable logic lives in `Shared/REMClassifier.swift` and is covered by
+`WatchREMClassifierTests`:
+
+```bash
+./run-tests.sh --watch
+```
+
+---
+
+## 6. Requirements
+
+| Component | Minimum |
+| --- | --- |
+| watchOS | 11.0 |
+| iOS | 26.2 |
+| Hardware | Apple Watch with heart-rate sensor |
+| Xcode | 26+ |
