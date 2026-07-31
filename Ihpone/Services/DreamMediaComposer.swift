@@ -64,14 +64,20 @@ final class DreamMediaComposer {
             throw ComposerError.missingREMProfile
         }
 
-        progressHandler?(0.15)
+        progressHandler?(0.05)
         let prompt = DreamMediaPrompt(dream: dream, profile: profile)
+        let scoreProfile = DreamScoreProfile(dream: dream, prompt: prompt)
+        let duration = scoreProfile.alignedDuration(target: profile.totalDuration)
 
-        let videoURL = try await synthesizeVideo(prompt: prompt, dream: dream, progressHandler: progressHandler)
-        let audioURL = try await synthesizeAudio(prompt: prompt, dream: dream, progressHandler: progressHandler)
-        let waveform = generateWaveform(from: prompt, duration: profile.totalDuration)
+        let score = try synthesizeAudio(dream: dream, scoreProfile: scoreProfile, duration: duration)
+        progressHandler?(0.3)
+        let videoURL = try await synthesizeVideo(prompt: prompt,
+                                                 dream: dream,
+                                                 duration: duration,
+                                                 tempo: Double(scoreProfile.tempo),
+                                                 progressHandler: progressHandler)
         let scenes = makeScenes(for: dream, profile: profile)
-        let diagnostics = prompt.diagnostics
+        let diagnostics = prompt.diagnostics.merging(score.diagnostics) { _, new in new }
 
         progressHandler?(1.0)
 
@@ -79,11 +85,11 @@ final class DreamMediaComposer {
             headline: "Dream Film: \(dream.mood.displayName)",
             soundtrackMood: prompt.soundtrackLabel,
             previewText: prompt.preview,
-            runtime: scenes.reduce(0) { $0 + $1.duration },
+            runtime: duration,
             scenes: scenes,
             videoURL: videoURL,
-            audioURL: audioURL,
-            waveform: waveform,
+            audioURL: score.url,
+            waveform: score.waveform,
             diagnostics: diagnostics
         )
     }
@@ -92,45 +98,25 @@ final class DreamMediaComposer {
 private extension DreamMediaComposer {
     func synthesizeVideo(prompt: DreamMediaPrompt,
                          dream: SleepData,
+                         duration: TimeInterval,
+                         tempo: Double,
                          progressHandler: (@Sendable (Double) -> Void)?) async throws -> URL {
-        let palette = prompt.palette
-        let duration = max(30, prompt.profile.totalDuration)
         let fileURL = cache.makeURL(fileName: "\(dream.id.uuidString)-video", fileExtension: "mp4")
-
-        try await VideoPlaceholderWriter.write(
-            to: fileURL,
-            duration: min(duration, 60),
-            palette: palette,
-            visualProfile: prompt.visualProfile
-        )
-
-        progressHandler?(0.55)
+        try await DreamFilmRenderer.write(to: fileURL,
+                                          duration: duration,
+                                          tempo: tempo,
+                                          profile: prompt.visualProfile,
+                                          progressHandler: progressHandler)
         return fileURL
     }
 
-    func synthesizeAudio(prompt: DreamMediaPrompt,
-                         dream: SleepData,
-                         progressHandler: (@Sendable (Double) -> Void)?) async throws -> URL {
+    func synthesizeAudio(dream: SleepData,
+                         scoreProfile: DreamScoreProfile,
+                         duration: TimeInterval) throws -> DreamScoreRender {
         let fileURL = cache.makeURL(fileName: "\(dream.id.uuidString)-score", fileExtension: "caf")
-        let scoreProfile = DreamScoreProfile(dream: dream, prompt: prompt)
-        try AudioPlaceholderWriter.write(
-            to: fileURL,
-            duration: min(prompt.profile.totalDuration, 60),
-            baseFrequency: prompt.baseFrequency,
-            profile: scoreProfile
-        )
-        progressHandler?(0.8)
-        return fileURL
-    }
-
-    func generateWaveform(from prompt: DreamMediaPrompt, duration: TimeInterval) -> [Double] {
-        let steps = 80
-        let base = max(0.1, min(1, prompt.profile.intensityScore))
-        return (0..<steps).map { index in
-            let t = Double(index) / Double(steps)
-            let noise = Double.random(in: -0.08...0.08)
-            return clamp(base + sin(t * .pi * 2 * prompt.motionEnergy) * 0.2 + noise, low: 0, high: 1)
-        }
+        try? FileManager.default.removeItem(at: fileURL)
+        let waveform = try DreamScoreRenderer.render(to: fileURL, profile: scoreProfile, duration: duration)
+        return DreamScoreRender(url: fileURL, waveform: waveform, diagnostics: scoreProfile.diagnostics)
     }
 
     func makeScenes(for dream: SleepData, profile: REMDreamProfile) -> [DreamVideoScene] {
@@ -173,11 +159,10 @@ private extension DreamMediaComposer {
 private struct DreamMediaPrompt {
     let dream: SleepData
     let profile: REMDreamProfile
-    let palette: [UIColor]
     let motionEnergy: Double
+    let genre: DreamGenre
     let soundtrackLabel: String
     let preview: String
-    let baseFrequency: Double
     let visualProfile: DreamVisualProfile
 
     var diagnostics: [String: String] {
@@ -186,179 +171,337 @@ private struct DreamMediaPrompt {
             "moodPolarity": String(format: "%.2f", profile.moodPolarity),
             "motionEnergy": String(format: "%.2f", motionEnergy),
             "apneaSpikes": "\(profile.apneaSpikeCount)",
-            "noiseSpikes": "\(profile.noiseSpikeCount)",
-            "visualStyle": visualProfile.style.rawValue,
-            "ribbons": "\(visualProfile.ribbonLayers)",
-            "glyphComplexity": "\(visualProfile.glyphComplexity)"
-        ]
+            "noiseSpikes": "\(profile.noiseSpikeCount)"
+        ].merging(visualProfile.diagnostics) { _, new in new }
     }
 
     init(dream: SleepData, profile: REMDreamProfile) {
         self.dream = dream
         self.profile = profile
-        let colors = dream.mood.colors.map { UIColor($0) }
-        self.palette = colors.isEmpty ? [UIColor.systemPurple, UIColor.systemPink] : colors
         self.motionEnergy = max(0.3, min(1.6, profile.intensityScore * 1.5 + Double(profile.apneaSpikeCount) * 0.1))
-        self.soundtrackLabel = "REM \(dream.mood.displayName) score"
+        let genre = DreamGenre.make(mood: dream.mood, intensity: profile.intensityScore)
+        self.genre = genre
+        self.soundtrackLabel = genre.soundtrackLabel
         self.preview = "REM energy \(Int(profile.intensityScore * 100))% • mood \(String(format: "%.1f", profile.moodPolarity))"
-        self.baseFrequency = 220 + Double(profile.moodPolarity * 60)
-        self.visualProfile = DreamVisualProfile(dream: dream, profile: profile)
+        self.visualProfile = DreamVisualProfile(mood: dream.mood,
+                                                genre: genre,
+                                                profile: profile,
+                                                seed: makeSeed(from: dream.id))
     }
 }
 
-private struct DreamVisualProfile {
-    enum Style: String {
-        case aurora
-        case astral
-        case tempest
-        case lucid
+private struct DreamScoreRender {
+    let url: URL
+    let waveform: [Double]
+    let diagnostics: [String: String]
+}
+
+/// Musical genre chosen from the dream mood — drives instrumentation, tempo and mix.
+enum DreamGenre: String {
+    case symphonic
+    case chamber
+    case celestial
+    case cinematic
+    case hardRock
+    case industrial
+
+    static func make(mood: DreamMood, intensity: Double) -> DreamGenre {
+        switch mood {
+        case .peaceful:
+            return .symphonic
+        case .calm:
+            return intensity > 0.55 ? .symphonic : .chamber
+        case .ethereal:
+            return .celestial
+        case .intense:
+            return intensity > 0.6 ? .hardRock : .cinematic
+        case .turbulent:
+            return .hardRock
+        case .chaotic:
+            return .industrial
+        }
     }
 
-    let style: Style
-    let ribbonLayers: Int
-    let ribbonAmplitude: Double
-    let sparkDensity: Int
-    let glyphComplexity: Int
-    let spiralLayers: Int
-    let nebulaStrength: Double
-    let orbitalCount: Int
-    let highlightDensity: Int
-    let filmGrain: Double
-    let scanlineOpacity: Double
-    let chromaDrift: Double
-    let runeAlpha: Double
-    let runeDrift: Double
-    let parallaxTilt: Double
-    let causticStrength: Double
-    let seed: UInt64
-
-    init(dream: SleepData, profile: REMDreamProfile) {
-        let intensity = clamp(profile.intensityScore, low: 0, high: 1)
-        let polarity = Double(profile.moodPolarity)
-        let apnea = Double(profile.apneaSpikeCount)
-        let noise = Double(profile.noiseSpikeCount)
-        switch dream.mood {
-        case .peaceful, .calm:
-            style = .aurora
-        case .ethereal:
-            style = .astral
-        case .intense, .turbulent:
-            style = .tempest
-        case .chaotic:
-            style = .lucid
+    var soundtrackLabel: String {
+        switch self {
+        case .symphonic: return "Symphonic strings, harp & choir"
+        case .chamber: return "Chamber ensemble & woodwind"
+        case .celestial: return "Celestial choir & glass bells"
+        case .cinematic: return "Cinematic hybrid orchestra"
+        case .hardRock: return "Hard rock — driven guitars & live drums"
+        case .industrial: return "Industrial metal — down-tuned & relentless"
         }
-        ribbonLayers = max(3, Int(3 + intensity * 3 + apnea * 0.4))
-        ribbonAmplitude = 0.16 + intensity * 0.22 + apnea * 0.03
-        sparkDensity = 60 + Int(intensity * 50) + Int(noise * 3)
-        glyphComplexity = min(16, 8 + Int(abs(polarity) * 12) + profile.segments.count)
-        spiralLayers = 2 + Int(apnea > 1 ? 1 : 0) + Int(intensity * 1.3)
-        nebulaStrength = 0.45 + intensity * 0.6
-        orbitalCount = max(4, 4 + Int(intensity * 3))
-        highlightDensity = 18 + Int(intensity * 14)
-        filmGrain = 0.015 + intensity * 0.015 + noise * 0.002
-        scanlineOpacity = (style == .tempest ? 0.08 : 0.05) + intensity * 0.04
-        chromaDrift = 0.005 + abs(polarity) * 0.015 + intensity * 0.01
-        runeAlpha = 0.08 + abs(polarity) * 0.12
-        runeDrift = 0.35 + intensity * 0.45
-        parallaxTilt = (style == .tempest ? 10 : 6) + intensity * 8
-        causticStrength = 0.04 + intensity * 0.08 + apnea * 0.015
-        seed = makeSeed(from: dream.id)
     }
 }
 
 private struct DreamScoreProfile {
-    let progression: [[Float]]
-    let melody: [Float]
-    let countermelody: [Float]
-    let ornament: [Float]
-    let padSpread: [Float]
-    let sceneLength: Float
-    let rubatoDepth: Float
-    let ornamentChance: Float
-    let harpBrightness: Float
-    let stringSwell: Float
-    let textureLevel: Float
-    let noiseFloor: Float
+    enum LeadVoice { case violin, flute, bell, brass, leadGuitar }
+    enum ArpVoice { case harp, glass, pluck, palmMute }
+    enum Percussion { case orchestral, cinematic, rockKit, metalKit }
+
+    struct LayerGains {
+        var pad: Float
+        var choir: Float
+        var lead: Float
+        var arp: Float
+        var bass: Float
+        var guitar: Float
+        var drums: Float
+    }
+
+    let genre: DreamGenre
+    let tempo: Float
+    let beatsPerBar: Int
+    let barsPerChord: Int
+    let tonicHz: Float
+    let scale: [Float]
+    let progression: [Int]
+    /// Scale degrees on an eighth-note grid, `nil` is a rest.
+    let melody: [Int?]
+    /// Chord-tone indices on an eighth-note grid; values ≥ 4 shift up an octave.
+    let arpPattern: [Int?]
+    /// Scale-step offsets from the chord root on a sixteenth grid.
+    let riff: [Int?]
+    let bassPattern: [Int?]
+    let kickPattern: [Float]
+    let snarePattern: [Float]
+    let hatPattern: [Float]
+    let leadVoice: LeadVoice
+    let arpVoice: ArpVoice
+    let percussion: Percussion
+    let gains: LayerGains
+    let drive: Float
+    let brightness: Float
+    let reverbMix: Float
+    let reverbSize: Float
+    let delayMix: Float
+    let delaySeconds: Float
+    let stereoWidth: Float
     let seed: UInt64
 
+    var diagnostics: [String: String] {
+        [
+            "genre": genre.rawValue,
+            "tempo": String(format: "%.0f BPM", tempo),
+            "key": String(format: "%.1f Hz", tonicHz),
+            "channels": "stereo"
+        ]
+    }
+
+    /// Snaps the requested runtime to whole bars so the score and film loop seamlessly together.
+    func alignedDuration(target: TimeInterval) -> TimeInterval {
+        let secondsPerBar = Float(beatsPerBar) * 60 / tempo
+        let requested = min(max(Float(target), 34), 58)
+        let bars = max(4, Int((requested / secondsPerBar).rounded()))
+        return TimeInterval(min(Float(bars) * secondsPerBar, 60))
+    }
+
     init(dream: SleepData, prompt: DreamMediaPrompt) {
-        let polarity = Float(prompt.profile.moodPolarity)
-        let intensity = Float(prompt.profile.intensityScore)
-        let motion = Float(prompt.motionEnergy)
-        let noise = Float(prompt.profile.noiseSpikeCount)
+        let rem = prompt.profile
+        let intensity = Float(min(max(rem.intensityScore, 0), 1))
+        let polarity = Float(rem.moodPolarity)
+        let apnea = Float(rem.apneaSpikeCount)
+        let noiseSpikes = Float(rem.noiseSpikeCount)
+        let genre = prompt.genre
+        self.genre = genre
 
-        seed = makeSeed(from: dream.id)
+        let startBits = UInt64(bitPattern: Int64(dream.startedAt.timeIntervalSince1970.rounded()))
+        let seed = makeSeed(from: dream.id) ^ (startBits &* 0x9E37_79B9_7F4A_7C15)
+        self.seed = seed
+        var rng = DreamRandom(seed: seed)
 
-        let classicalMajor: [[Float]] = [[0, 4, 7, 12], [7, 11, 14, 19], [5, 9, 12, 17], [0, 4, 7, 12]]
-        let dramaticMinor: [[Float]] = [[0, 7, 10, 15], [-5, 2, 7, 12], [3, 10, 15, 19], [-2, 5, 9, 14]]
-        let celestial: [[Float]] = [[0, 4, 6, 11], [5, 9, 13, 17], [2, 7, 11, 16], [-2, 4, 9, 14]]
-        let restless: [[Float]] = [[0, 7, 12, 19], [-4, 3, 7, 12], [1, 8, 12, 17], [-2, 4, 9, 14]]
+        let averageHR = rem.segments.isEmpty
+            ? 62
+            : rem.segments.reduce(0) { $0 + $1.heartRateAvg } / Double(rem.segments.count)
+        let pulse = Float(min(max((averageHR - 46) / 42, 0), 1))
 
-        let baseSets: ([[Float]], [Float], [Float], [Float])
-        switch dream.mood {
-        case .peaceful, .calm:
-            baseSets = (classicalMajor,
-                        [0, 2, 4, 7, 9, 7, 4, 2],
-                        [12, 11, 9, 7, 9, 11, 12, 14],
-                        [5, 7, 9, 10, 9, 7])
-        case .ethereal:
-            baseSets = (celestial,
-                        [0, 4, 6, 7, 9, 11, 9, 7],
-                        [11, 9, 7, 6, 7, 9, 11, 13],
-                        [9, 11, 13, 14, 13, 11])
-        case .intense, .turbulent:
-            baseSets = (dramaticMinor,
-                        [0, 3, 5, 7, 8, 7, 5, 3],
-                        [12, 10, 8, 7, 8, 10, 12, 15],
-                        [7, 8, 10, 12, 10, 8])
-        case .chaotic:
-            baseSets = (restless,
-                        [0, 3, 1, 5, 7, 4, 6, 2],
-                        [12, 14, 11, 9, 7, 9, 11, 13],
-                        [2, 5, 8, 11, 8, 5])
+        let tempoRange: (Float, Float)
+        switch genre {
+        case .symphonic: tempoRange = (56, 74)
+        case .chamber: tempoRange = (64, 84)
+        case .celestial: tempoRange = (48, 64)
+        case .cinematic: tempoRange = (82, 102)
+        case .hardRock: tempoRange = (122, 148)
+        case .industrial: tempoRange = (138, 172)
+        }
+        let tempoBlend = min(max(pulse * 0.6 + intensity * 0.3 + rng.nextFloat() * 0.2 - 0.1, 0), 1)
+        tempo = tempoRange.0 + (tempoRange.1 - tempoRange.0) * tempoBlend
+        beatsPerBar = 4
+        barsPerChord = genre == .celestial ? 2 : 1
+
+        let keySteps: [Float] = [0, 2, 3, 5, 7, 8, 10]
+        let keyStep = keySteps[Int(rng.nextFloat() * Float(keySteps.count)) % keySteps.count]
+        let baseHz: Float
+        switch genre {
+        case .symphonic, .chamber: baseHz = 130.81
+        case .celestial: baseHz = 146.83
+        case .cinematic: baseHz = 110.00
+        case .hardRock: baseHz = 82.41
+        case .industrial: baseHz = 73.42
+        }
+        tonicHz = baseHz * powf(2, keyStep / 12)
+
+        let major: [Float] = [0, 2, 4, 5, 7, 9, 11]
+        let lydian: [Float] = [0, 2, 4, 6, 7, 9, 11]
+        let dorian: [Float] = [0, 2, 3, 5, 7, 9, 10]
+        let aeolian: [Float] = [0, 2, 3, 5, 7, 8, 10]
+        let phrygian: [Float] = [0, 1, 3, 5, 7, 8, 10]
+        switch genre {
+        case .symphonic: scale = polarity >= 0 ? major : dorian
+        case .chamber: scale = major
+        case .celestial: scale = lydian
+        case .cinematic: scale = aeolian
+        case .hardRock: scale = intensity > 0.7 ? phrygian : aeolian
+        case .industrial: scale = phrygian
         }
 
-        let rotationMelody = Int(seed % UInt64(max(baseSets.1.count, 1)))
-        let rotationCounter = Int((seed >> 5) % UInt64(max(baseSets.2.count, 1)))
-        let rotationOrnament = Int((seed >> 9) % UInt64(max(baseSets.3.count, 1)))
-        let rotationProg = Int((seed >> 13) % UInt64(max(baseSets.0.count, 1)))
+        let progressionBank: [[Int]]
+        switch genre {
+        case .symphonic: progressionBank = [[0, 4, 5, 3], [0, 3, 4, 0], [5, 3, 0, 4], [0, 5, 1, 4]]
+        case .chamber: progressionBank = [[0, 3, 0, 4], [0, 5, 3, 4], [1, 4, 0, 0]]
+        case .celestial: progressionBank = [[0, 4, 5, 1], [0, 1, 4, 0], [5, 1, 0, 4]]
+        case .cinematic: progressionBank = [[0, 5, 3, 4], [0, 2, 5, 4], [0, 6, 5, 4]]
+        case .hardRock: progressionBank = [[0, 0, 5, 3], [0, 3, 4, 0], [0, 6, 5, 4], [0, 0, 2, 4]]
+        case .industrial: progressionBank = [[0, 1, 0, 4], [0, 4, 1, 0], [0, 0, 1, 6]]
+        }
+        progression = progressionBank[Int(rng.nextFloat() * Float(progressionBank.count)) % progressionBank.count]
 
-        progression = Self.rotated(baseSets.0, offset: rotationProg)
-        melody = Self.rotated(baseSets.1, offset: rotationMelody)
-        countermelody = Self.rotated(baseSets.2, offset: rotationCounter)
-        ornament = Self.rotated(baseSets.3, offset: rotationOrnament)
-
-        padSpread = [
-            -0.18 - intensity * 0.05,
-            0.02 + polarity * 0.04,
-            0.18 + intensity * 0.09
+        let flowing: [[Int?]] = [
+            [4, 6, 7, 6, 4, nil, 2, 4, 6, 7, 9, 7, 6, nil, 4, nil],
+            [2, 4, 6, 4, 7, 6, 4, nil, 2, 0, 2, 4, 6, 4, 2, nil],
+            [7, 6, 4, 6, 7, 9, 7, nil, 6, 4, 2, 4, 6, 7, 6, nil]
         ]
+        let driving: [[Int?]] = [
+            [4, 4, 6, 4, 7, 6, 4, nil, 4, 6, 7, 6, 4, 2, 4, nil],
+            [7, 6, 4, 6, 4, nil, 2, 4, 7, 9, 7, 6, 4, 6, 4, nil],
+            [4, nil, 6, 7, 6, 4, nil, 2, 4, 7, 9, 7, 6, 4, nil, nil]
+        ]
+        let melodyBank = (genre == .hardRock || genre == .industrial || genre == .cinematic) ? driving : flowing
+        melody = melodyBank[Int(rng.nextFloat() * Float(melodyBank.count)) % melodyBank.count]
 
-        sceneLength = max(3.8, min(7.5, 4.4 + motion * 1.3 + intensity * 2.6))
-        rubatoDepth = max(0.25, min(0.85, 0.3 + motion * 0.28 + abs(polarity) * 0.18))
-        ornamentChance = max(0.05, min(0.6, 0.12 + intensity * 0.3 + abs(polarity) * 0.2))
-        harpBrightness = max(0.6, min(1.35, 0.85 + polarity * 0.25 + motion * 0.1))
-        stringSwell = max(0.45, min(1.2, 0.55 + motion * 0.35 + intensity * 0.15))
-        textureLevel = max(0.004, min(0.02, 0.006 + noise * 0.001 + intensity * 0.006))
-        noiseFloor = max(0.002, min(0.008, 0.003 + noise * 0.0008 + intensity * 0.0008))
-    }
+        let arpBank: [[Int?]] = [
+            [0, 1, 2, 3, 4, 3, 2, 1],
+            [0, 2, 1, 3, 2, 4, 3, 1],
+            [0, 1, 2, 4, 2, 1, 0, 2],
+            [0, 3, 1, 4, 2, 5, 3, 1]
+        ]
+        arpPattern = arpBank[Int(rng.nextFloat() * Float(arpBank.count)) % arpBank.count]
 
-    private static func rotated(_ values: [Float], offset: Int) -> [Float] {
-        guard !values.isEmpty else { return [] }
-        let normalized = ((offset % values.count) + values.count) % values.count
-        if normalized == 0 { return values }
-        let head = Array(values[normalized...])
-        let tail = Array(values[..<normalized])
-        return head + tail
-    }
+        let riffBank: [[Int?]] = [
+            [0, nil, 0, 0, nil, 0, 0, nil, 0, nil, 0, 0, 2, nil, 1, nil],
+            [0, 0, nil, 0, 0, nil, 0, 0, nil, 0, 0, nil, 3, nil, 2, nil],
+            [0, nil, nil, nil, 0, nil, nil, nil, 2, nil, nil, nil, 1, nil, 0, nil],
+            [0, 0, 0, 0, 2, 2, 0, 0, 1, 1, 0, 0, 4, nil, 3, nil]
+        ]
+        let chosenRiff = riffBank[Int(rng.nextFloat() * Float(riffBank.count)) % riffBank.count]
+        riff = chosenRiff
 
-    private static func rotated(_ values: [[Float]], offset: Int) -> [[Float]] {
-        guard !values.isEmpty else { return [] }
-        let normalized = ((offset % values.count) + values.count) % values.count
-        if normalized == 0 { return values }
-        let head = Array(values[normalized...])
-        let tail = Array(values[..<normalized])
-        return head + tail
+        switch genre {
+        case .hardRock, .industrial:
+            bassPattern = chosenRiff
+        case .cinematic:
+            bassPattern = [0, nil, nil, nil, 0, nil, nil, nil, 4, nil, nil, nil, 0, nil, nil, nil]
+        default:
+            bassPattern = [0, nil, nil, nil, nil, nil, nil, nil, 4, nil, nil, nil, nil, nil, nil, nil]
+        }
+
+        switch genre {
+        case .symphonic, .chamber, .celestial:
+            percussion = .orchestral
+            kickPattern = [0.8, 0, 0, 0, 0, 0, 0, 0, 0.5, 0, 0, 0, 0, 0, 0, 0]
+            snarePattern = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            hatPattern = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        case .cinematic:
+            percussion = .cinematic
+            kickPattern = [1, 0, 0, 0, 0, 0, 0.7, 0, 1, 0, 0, 0, 0, 0, 0.7, 0]
+            snarePattern = [0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0.4]
+            hatPattern = [0, 0, 0.3, 0, 0, 0, 0.3, 0, 0, 0, 0.3, 0, 0, 0, 0.3, 0]
+        case .hardRock:
+            percussion = .rockKit
+            kickPattern = [1, 0, 0, 0, 0, 0, 0.85, 0, 0, 0, 1, 0, 0, 0.6, 0, 0]
+            snarePattern = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0.45]
+            hatPattern = [0.85, 0, 0.5, 0, 0.8, 0, 0.5, 0, 0.85, 0, 0.5, 0, 0.8, 0, 0.55, 0.35]
+        case .industrial:
+            percussion = .metalKit
+            kickPattern = [1, 0, 0.9, 0.9, 0, 0.9, 0.9, 0, 1, 0, 0.9, 0.9, 0, 0.9, 0, 0.9]
+            snarePattern = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0.5]
+            hatPattern = [0.7, 0, 0.7, 0, 0.7, 0, 0.7, 0, 0.7, 0, 0.7, 0, 0.7, 0, 0.7, 0.5]
+        }
+
+        let baseDrive: Float
+        let baseBrightness: Float
+        let baseReverbMix: Float
+        let baseWidth: Float
+
+        switch genre {
+        case .symphonic:
+            leadVoice = .violin
+            arpVoice = .harp
+            gains = LayerGains(pad: 1.0, choir: 0.8, lead: 0.9, arp: 0.7, bass: 0.85, guitar: 0, drums: 0.45)
+            baseDrive = 0.03
+            baseBrightness = 0.45
+            baseReverbMix = 0.42
+            reverbSize = 0.88
+            delayMix = 0.14
+            baseWidth = 0.95
+        case .chamber:
+            leadVoice = .flute
+            arpVoice = .pluck
+            gains = LayerGains(pad: 0.85, choir: 0.45, lead: 0.95, arp: 0.8, bass: 0.75, guitar: 0, drums: 0.3)
+            baseDrive = 0.02
+            baseBrightness = 0.55
+            baseReverbMix = 0.34
+            reverbSize = 0.8
+            delayMix = 0.12
+            baseWidth = 0.8
+        case .celestial:
+            leadVoice = .bell
+            arpVoice = .glass
+            gains = LayerGains(pad: 1.0, choir: 1.0, lead: 0.75, arp: 0.85, bass: 0.6, guitar: 0, drums: 0.2)
+            baseDrive = 0.02
+            baseBrightness = 0.7
+            baseReverbMix = 0.55
+            reverbSize = 0.92
+            delayMix = 0.3
+            baseWidth = 1.0
+        case .cinematic:
+            leadVoice = .brass
+            arpVoice = .pluck
+            gains = LayerGains(pad: 0.9, choir: 0.7, lead: 0.95, arp: 0.5, bass: 1.0, guitar: 0.35, drums: 0.95)
+            baseDrive = 0.22
+            baseBrightness = 0.6
+            baseReverbMix = 0.36
+            reverbSize = 0.84
+            delayMix = 0.16
+            baseWidth = 0.9
+        case .hardRock:
+            leadVoice = .leadGuitar
+            arpVoice = .palmMute
+            gains = LayerGains(pad: 0.28, choir: 0.15, lead: 0.8, arp: 0.3, bass: 1.0, guitar: 1.0, drums: 1.0)
+            baseDrive = 0.62 + intensity * 0.2
+            baseBrightness = 0.72
+            baseReverbMix = 0.2
+            reverbSize = 0.7
+            delayMix = 0.14
+            baseWidth = 0.85
+        case .industrial:
+            leadVoice = .leadGuitar
+            arpVoice = .palmMute
+            gains = LayerGains(pad: 0.22, choir: 0.2, lead: 0.7, arp: 0.25, bass: 1.0, guitar: 1.0, drums: 1.0)
+            baseDrive = 0.78 + intensity * 0.18
+            baseBrightness = 0.8
+            baseReverbMix = 0.16
+            reverbSize = 0.62
+            delayMix = 0.1
+            baseWidth = 0.75
+        }
+
+        // Apnea and ambient-noise spikes push the mix toward a rawer, wider, more driven sound.
+        drive = min(0.95, baseDrive + min(apnea, 8) * 0.012)
+        brightness = min(1, baseBrightness + min(noiseSpikes, 12) * 0.008)
+        reverbMix = min(0.7, baseReverbMix + min(apnea, 6) * 0.008)
+        stereoWidth = min(1, baseWidth + min(noiseSpikes, 10) * 0.006)
+        delaySeconds = (60 / tempo) * (genre == .hardRock || genre == .industrial ? 0.75 : 1.0)
     }
 }
 
@@ -378,729 +521,729 @@ private final class DreamMediaCache {
     }
 }
 
-private enum VideoPlaceholderWriter {
-    static func write(to url: URL,
-                      duration: TimeInterval,
-                      palette: [UIColor],
-                      visualProfile: DreamVisualProfile) async throws {
-        let width = 640
-        let height = 360
-        let assetWriter = try AVAssetWriter(outputURL: url, fileType: .mp4)
+private enum DreamScoreRenderer {
+    /// Renders a stereo, tempo-locked arrangement and returns a normalised RMS waveform for the UI.
+    static func render(to url: URL, profile: DreamScoreProfile, duration: TimeInterval) throws -> [Double] {
+        let sampleRate: Double = 44_100
         let settings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoWidthKey: width,
-            AVVideoHeightKey: height
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: sampleRate,
+            AVNumberOfChannelsKey: 2,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsNonInterleaved: false
         ]
-        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
-        writerInput.expectsMediaDataInRealTime = false
-        guard assetWriter.canAdd(writerInput) else { throw DreamMediaComposer.ComposerError.videoGenerationFailed }
-        assetWriter.add(writerInput)
-
-        let attributes: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32ARGB),
-            kCVPixelBufferWidthKey as String: width,
-            kCVPixelBufferHeightKey as String: height
-        ]
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: writerInput,
-                                                           sourcePixelBufferAttributes: attributes)
-        assetWriter.startWriting()
-        assetWriter.startSession(atSourceTime: .zero)
-
-        let fps: Double = 24
-        let totalFrames = max(1, Int(duration * fps))
-        for frameIndex in 0..<totalFrames {
-            let presentationTime = CMTime(value: CMTimeValue(frameIndex), timescale: CMTimeScale(fps))
-            while !writerInput.isReadyForMoreMediaData {
-                try await Task.sleep(nanoseconds: 10_000_000)
-            }
-            let phase = Double(frameIndex) / Double(totalFrames)
-            let seed = visualProfile.seed &+ UInt64(frameIndex &* 7919)
-            if let buffer = makePixelBuffer(palette: palette,
-                                            phase: phase,
-                                            visualProfile: visualProfile,
-                                            seed: seed) {
-                adaptor.append(buffer, withPresentationTime: presentationTime)
-            }
-        }
-
-        writerInput.markAsFinished()
-        await assetWriter.finishWriting()
-    }
-
-    static func makePixelBuffer(palette: [UIColor],
-                                phase: Double,
-                                visualProfile: DreamVisualProfile,
-                                seed: UInt64) -> CVPixelBuffer? {
-        let width = 640
-        let height = 360
-        var pixelBuffer: CVPixelBuffer?
-        let status = CVPixelBufferCreate(kCFAllocatorDefault,
-                                         width,
-                                         height,
-                                         kCVPixelFormatType_32ARGB,
-                                         nil,
-                                         &pixelBuffer)
-        guard status == kCVReturnSuccess, let buffer = pixelBuffer else { return nil }
-        CVPixelBufferLockBaseAddress(buffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
-
-        guard let context = CGContext(
-            data: CVPixelBufferGetBaseAddress(buffer),
-            width: CVPixelBufferGetWidth(buffer),
-            height: CVPixelBufferGetHeight(buffer),
-            bitsPerComponent: 8,
-            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
-        ) else { return nil }
-
-        let uiColors = palette.isEmpty ? [UIColor.systemPurple, UIColor.systemPink, UIColor.systemIndigo] : palette
-        let colors = uiColors.map { $0.cgColor }
-        guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                        colors: colors as CFArray,
-                                        locations: nil) else {
-            return nil
-        }
-
-        let size = CGSize(width: width, height: height)
-        let tilt = CGFloat(visualProfile.parallaxTilt)
-        let startPoint = CGPoint(x: size.width * 0.5 - tilt * 2, y: 0)
-        let endPoint = CGPoint(x: size.width * 0.5 + tilt * 0.8, y: size.height)
-        context.drawLinearGradient(gradient,
-                                   start: startPoint,
-                                   end: endPoint,
-                                   options: [])
-
-        drawLightHaze(context: context, size: size, phase: phase)
-        drawAuroraBands(context: context,
-                        size: size,
-                        palette: uiColors,
-                        phase: phase,
-                        layers: visualProfile.ribbonLayers,
-                        amplitude: visualProfile.ribbonAmplitude)
-        drawDreamRibbons(context: context,
-                         size: size,
-                         palette: uiColors,
-                         phase: phase,
-                         layers: visualProfile.ribbonLayers,
-                         amplitude: visualProfile.ribbonAmplitude)
-        drawREMSpirals(context: context,
-                       size: size,
-                       palette: uiColors,
-                       profile: visualProfile,
-                       phase: phase)
-        drawPulseNebula(context: context,
-                        size: size,
-                        palette: uiColors,
-                        phase: phase,
-                        strength: visualProfile.nebulaStrength)
-        drawOrbitalTrails(context: context,
-                          size: size,
-                          palette: uiColors,
-                          phase: phase,
-                          trailCount: visualProfile.orbitalCount,
-                          tilt: visualProfile.parallaxTilt)
-        drawStarlightField(context: context,
-                           size: size,
-                           palette: uiColors,
-                           phase: phase,
-                           starCount: visualProfile.sparkDensity)
-        drawSpecularHighlights(context: context,
-                               size: size,
-                               palette: uiColors,
-                               phase: phase,
-                               highlightCount: visualProfile.highlightDensity)
-        overlaySignalCaustics(context: context,
-                              size: size,
-                              palette: uiColors,
-                              phase: phase,
-                              strength: visualProfile.causticStrength)
-        overlayGlyphGrid(context: context,
-                         size: size,
-                         phase: phase,
-                         complexity: visualProfile.glyphComplexity,
-                         alpha: visualProfile.runeAlpha,
-                         drift: visualProfile.runeDrift)
-        overlayStaffLines(context: context, size: size, phase: phase)
-        applyLensBloom(context: context,
-                       size: size,
-                       phase: phase,
-                       intensity: visualProfile.nebulaStrength)
-        applyScanlineVignette(context: context,
-                              size: size,
-                              opacity: visualProfile.scanlineOpacity)
-        overlayChromaticAberration(context: context,
-                                   size: size,
-                                   palette: uiColors,
-                                   shift: visualProfile.chromaDrift)
-        addFilmGrain(context: context,
-                     size: size,
-                     amount: visualProfile.filmGrain,
-                     seed: seed)
-
-        return buffer
-    }
-
-    static func drawLightHaze(context: CGContext, size: CGSize, phase: Double) {
-        context.saveGState()
-        let center = CGPoint(x: size.width * 0.5, y: size.height * (0.3 + CGFloat(sin(phase * 2 * .pi)) * 0.1))
-        let colors = [UIColor.white.withAlphaComponent(0.15).cgColor,
-                      UIColor.clear.cgColor]
-        if let haze = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0, 1]) {
-            context.drawRadialGradient(haze,
-                                       startCenter: center,
-                                       startRadius: 0,
-                                       endCenter: center,
-                                       endRadius: max(size.width, size.height) * 0.8,
-                                       options: .drawsAfterEndLocation)
-        }
-        context.restoreGState()
-    }
-
-    static func drawDreamRibbons(context: CGContext,
-                                 size: CGSize,
-                                 palette: [UIColor],
-                                 phase: Double,
-                                 layers: Int,
-                                 amplitude: Double) {
-        let ribbonCount = max(1, layers)
-        let steps = 100
-        for index in 0..<ribbonCount {
-            let alpha = 0.25 + CGFloat(index) * 0.03
-            let color = palette[index % palette.count].withAlphaComponent(alpha).cgColor
-            let path = UIBezierPath()
-            for step in 0...steps {
-                let progress = Double(step) / Double(steps)
-                let x = CGFloat(progress) * size.width
-                let wave = sin(progress * .pi * (Double(index) * 0.6 + 1.8) + phase * 2 * .pi)
-                let arc = cos(phase * Double(index + 1) * 1.1) * 0.12
-                let jitter = sin(progress * 12 + Double(index)) * 0.02
-                let y = size.height * (0.5 + CGFloat(wave) * CGFloat(amplitude) + CGFloat(arc + jitter))
-                if step == 0 {
-                    path.move(to: CGPoint(x: x, y: y))
-                } else {
-                    path.addLine(to: CGPoint(x: x, y: y))
-                }
-            }
-            context.addPath(path.cgPath)
-            context.setLineWidth(CGFloat(1.2 + Double(index) * 0.4))
-            context.setStrokeColor(color)
-            context.strokePath()
-        }
-    }
-
-    static func drawSpecularHighlights(context: CGContext,
-                                       size: CGSize,
-                                       palette: [UIColor],
-                                       phase: Double,
-                                       highlightCount: Int) {
-        context.saveGState()
-        let count = max(10, highlightCount)
-        for index in 0..<count {
-            let t = (Double(index) / Double(count)) + phase
-            let normalized = t - floor(t)
-            let x = CGFloat(normalized) * size.width
-            let y = size.height * (0.2 + CGFloat(abs(sin((phase + Double(index)) * 2 * .pi))) * 0.6)
-            let radius = CGFloat(1.8 + sin((phase * 3) + Double(index)) * 1.2)
-            let color = palette[index % palette.count].withAlphaComponent(0.25 + CGFloat(index % 3) * 0.05).cgColor
-            context.setFillColor(color)
-            context.fillEllipse(in: CGRect(x: x - radius,
-                                           y: y - radius,
-                                           width: radius * 2,
-                                           height: radius * 2))
-        }
-        context.restoreGState()
-    }
-
-    static func drawOrbitalTrails(context: CGContext,
-                                  size: CGSize,
-                                  palette: [UIColor],
-                                  phase: Double,
-                                  trailCount: Int,
-                                  tilt: Double) {
-        context.saveGState()
-        let count = max(3, trailCount)
-        for index in 0..<count {
-            let normalized = Double(index) / Double(count)
-            let radius = size.width * 0.18 + CGFloat(normalized) * size.width * 0.12
-            let center = CGPoint(x: size.width * 0.5 + CGFloat(sin(phase * 1.3 + normalized * 2)) * CGFloat(tilt),
-                                 y: size.height * 0.55 + CGFloat(cos(phase * 1.1 + normalized * 2)) * CGFloat(tilt * 0.2))
-            let path = UIBezierPath(ovalIn: CGRect(x: center.x - radius,
-                                                   y: center.y - radius * 0.4,
-                                                   width: radius * 2,
-                                                   height: radius * 0.8))
-            context.setStrokeColor(palette[index % palette.count].withAlphaComponent(0.25).cgColor)
-            context.setLineWidth(CGFloat(0.7 + normalized))
-            context.addPath(path.cgPath)
-            context.strokePath()
-
-            let bodyAngle = CGFloat(phase * 4 + normalized * 6)
-            let dotX = center.x + cos(bodyAngle) * radius
-            let dotY = center.y + sin(bodyAngle) * radius * 0.4
-            let dotRect = CGRect(x: dotX - 3, y: dotY - 3, width: 6, height: 6)
-            context.setFillColor(UIColor.white.withAlphaComponent(0.4).cgColor)
-            context.fillEllipse(in: dotRect)
-        }
-        context.restoreGState()
-    }
-
-    static func drawStarlightField(context: CGContext,
-                                   size: CGSize,
-                                   palette: [UIColor],
-                                   phase: Double,
-                                   starCount: Int) {
-        context.saveGState()
-        let count = max(40, starCount)
-        for index in 0..<count {
-            let t = Double(index) / Double(count)
-            let flicker = CGFloat(0.15 + 0.1 * sin(phase * (4 + Double(index % 7)) + t * 30))
-            let x = CGFloat((sin(t * 89 + phase * 1.3) + 1) * 0.5) * size.width
-            let y = CGFloat((cos(t * 53 + phase * 0.9) + 1) * 0.5) * size.height
-            let rect = CGRect(x: x, y: y, width: 1.5 + flicker, height: 1.5 + flicker)
-            let color = palette[index % palette.count].withAlphaComponent(0.2 + 0.15 * flicker).cgColor
-            context.setFillColor(color)
-            context.fillEllipse(in: rect)
-        }
-        context.restoreGState()
-    }
-
-    static func overlayStaffLines(context: CGContext, size: CGSize, phase: Double) {
-        context.saveGState()
-        context.setStrokeColor(UIColor.white.withAlphaComponent(0.08).cgColor)
-        context.setLineWidth(0.6)
-        let staffHeight = size.height * 0.4
-        let spacing = staffHeight / 10
-        let offsetY = size.height * 0.15 + CGFloat(sin(phase * 2)) * 12
-        for line in 0..<5 {
-            let y = offsetY + CGFloat(line) * spacing
-            context.move(to: CGPoint(x: 0, y: y))
-            context.addLine(to: CGPoint(x: size.width, y: y))
-        }
-        context.strokePath()
-        context.restoreGState()
-    }
-
-    static func drawAuroraBands(context: CGContext,
-                                size: CGSize,
-                                palette: [UIColor],
-                                phase: Double,
-                                layers: Int,
-                                amplitude: Double) {
-        context.saveGState()
-        let count = max(2, layers / 2)
-        for index in 0..<count {
-            let hueShift = Double(index) / Double(max(1, count))
-            let color = palette[index % palette.count].withAlphaComponent(0.3).cgColor
-            let path = UIBezierPath()
-            let steps = 120
-            for step in 0...steps {
-                let progress = Double(step) / Double(steps)
-                let x = CGFloat(progress) * size.width
-                let wave = sin(progress * .pi * (1.2 + hueShift) + phase * 3)
-                let drift = cos((phase + hueShift) * 2 * .pi) * amplitude
-                let y = size.height * (0.2 + CGFloat(wave) * 0.12 + CGFloat(drift) * 0.2)
-                if step == 0 {
-                    path.move(to: CGPoint(x: x, y: y))
-                } else {
-                    path.addLine(to: CGPoint(x: x, y: y))
-                }
-            }
-            context.addPath(path.cgPath)
-            context.setLineWidth(CGFloat(4 - min(index, 2)))
-            context.setShadow(offset: .zero, blur: CGFloat(15 - index * 3), color: color)
-            context.setStrokeColor(color)
-            context.strokePath()
-        }
-        context.restoreGState()
-    }
-
-    static func drawPulseNebula(context: CGContext,
-                                size: CGSize,
-                                palette: [UIColor],
-                                phase: Double,
-                                strength: Double) {
-        context.saveGState()
-        let center = CGPoint(x: size.width * 0.5, y: size.height * (0.55 + CGFloat(sin(phase * 1.7)) * 0.05))
-        for index in 0..<3 {
-            let modulation = 1 + sin(phase * Double(index + 2) * 2 * .pi) * 0.25 * strength
-            let radius = max(size.width, size.height) * (0.25 + CGFloat(index) * 0.2) * CGFloat(modulation)
-            let colors = [palette[(index + 1) % palette.count].withAlphaComponent(0.2 + CGFloat(strength) * 0.1).cgColor,
-                          UIColor.clear.cgColor]
-            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0, 1]) {
-                context.drawRadialGradient(gradient,
-                                           startCenter: center,
-                                           startRadius: 0,
-                                           endCenter: center,
-                                           endRadius: radius,
-                                           options: .drawsAfterEndLocation)
-            }
-        }
-        context.restoreGState()
-    }
-
-    static func overlayGlyphGrid(context: CGContext,
-                                 size: CGSize,
-                                 phase: Double,
-                                 complexity: Int,
-                                 alpha: Double,
-                                 drift: Double) {
-        context.saveGState()
-        context.setLineWidth(0.5)
-        let columns = max(3, complexity)
-        let rows = max(2, (complexity + 1) / 2)
-        for row in 0..<rows {
-            for column in 0..<columns {
-                let cellWidth = size.width / CGFloat(columns)
-                let cellHeight = size.height / CGFloat(rows)
-                let origin = CGPoint(x: CGFloat(column) * cellWidth, y: CGFloat(row) * cellHeight)
-                let wave = sin(phase * 6 + Double(row + column)) * drift
-                let inset = CGFloat(6 + wave * 8)
-                let rect = CGRect(x: origin.x + inset,
-                                  y: origin.y + inset,
-                                  width: cellWidth - inset * 2,
-                                  height: cellHeight - inset * 2)
-                let tint = UIColor.white.withAlphaComponent(CGFloat(alpha) * 0.5)
-                context.setStrokeColor(tint.cgColor)
-                context.stroke(rect)
-            }
-        }
-        context.restoreGState()
-    }
-
-    static func overlaySignalCaustics(context: CGContext,
-                                      size: CGSize,
-                                      palette: [UIColor],
-                                      phase: Double,
-                                      strength: Double) {
-        context.saveGState()
-        let bands = max(6, Int(10 + strength * 40))
-        for index in 0..<bands {
-            let normalized = Double(index) / Double(bands)
-            let width = size.width / CGFloat(bands) * CGFloat(0.3 + sin(normalized * 8 + phase * 3) * 0.15 + strength)
-            let x = CGFloat(normalized) * size.width
-            let alpha = 0.015 + CGFloat(strength) * 0.08
-            context.setFillColor(palette[index % palette.count].withAlphaComponent(alpha).cgColor)
-            context.fill(CGRect(x: x, y: 0, width: width, height: size.height))
-        }
-        context.restoreGState()
-    }
-
-    static func drawREMSpirals(context: CGContext,
-                               size: CGSize,
-                               palette: [UIColor],
-                               profile: DreamVisualProfile,
-                               phase: Double) {
-        context.saveGState()
-        let center = CGPoint(x: size.width * 0.5, y: size.height * 0.55)
-        let layers = max(1, profile.spiralLayers)
-        for layer in 0..<layers {
-            let radius = min(size.width, size.height) * (0.15 + CGFloat(layer) * 0.12)
-            let path = UIBezierPath()
-            let steps = 140
-            for step in 0...steps {
-                let progress = Double(step) / Double(steps)
-                let angle = progress * .pi * 2 * (1.2 + Double(layer) * 0.35) + phase * 4
-                let spiralRadius = radius * CGFloat(progress)
-                let x = center.x + cos(angle) * spiralRadius
-                let y = center.y + sin(angle) * spiralRadius * 0.65
-                if step == 0 {
-                    path.move(to: CGPoint(x: x, y: y))
-                } else {
-                    path.addLine(to: CGPoint(x: x, y: y))
-                }
-            }
-            context.setStrokeColor(palette[layer % palette.count].withAlphaComponent(0.28).cgColor)
-            context.setLineWidth(CGFloat(0.8 + Double(layer) * 0.4))
-            context.addPath(path.cgPath)
-            context.strokePath()
-        }
-        context.restoreGState()
-    }
-
-    static func applyLensBloom(context: CGContext,
-                               size: CGSize,
-                               phase: Double,
-                               intensity: Double) {
-        context.saveGState()
-        let bloomRect = CGRect(x: 0, y: 0, width: size.width, height: size.height)
-        let baseAlpha = 0.04 + CGFloat(intensity) * 0.05
-        context.setFillColor(UIColor.white.withAlphaComponent(baseAlpha + CGFloat(0.02 * sin(phase * 6))).cgColor)
-        context.fill(bloomRect)
-        context.setBlendMode(.screen)
-        let sweepY = size.height * (0.3 + CGFloat(phase) * 0.4)
-        context.setFillColor(UIColor.white.withAlphaComponent(0.08 + CGFloat(intensity) * 0.04).cgColor)
-        context.fill(CGRect(x: 0, y: sweepY, width: size.width, height: 20))
-        context.restoreGState()
-    }
-
-    static func applyScanlineVignette(context: CGContext,
-                                      size: CGSize,
-                                      opacity: Double) {
-        context.saveGState()
-        let lineCount = Int(size.height / 4)
-        for line in 0..<lineCount {
-            let y = CGFloat(line) * 4
-            let alpha = CGFloat(opacity) * (0.2 + 0.2 * sin(CGFloat(line) * 0.1))
-            context.setStrokeColor(UIColor.white.withAlphaComponent(alpha).cgColor)
-            context.setLineWidth(0.3)
-            context.move(to: CGPoint(x: 0, y: y))
-            context.addLine(to: CGPoint(x: size.width, y: y))
-            context.strokePath()
-        }
-        let border = CGRect(origin: .zero, size: size)
-        context.setStrokeColor(UIColor.black.withAlphaComponent(CGFloat(opacity) * 0.6).cgColor)
-        context.setLineWidth(35)
-        context.stroke(border)
-        context.restoreGState()
-    }
-
-    static func overlayChromaticAberration(context: CGContext,
-                                           size: CGSize,
-                                           palette: [UIColor],
-                                           shift: Double) {
-        guard let primary = palette.first else { return }
-        context.saveGState()
-        context.setBlendMode(.screen)
-        let offset = CGFloat(shift * 80)
-        context.setFillColor(primary.withAlphaComponent(0.06).cgColor)
-        context.fill(CGRect(x: offset, y: 0, width: size.width, height: size.height))
-        if let secondary = palette.last {
-            context.setFillColor(secondary.withAlphaComponent(0.04).cgColor)
-            context.fill(CGRect(x: -offset * 0.6, y: offset * 0.3, width: size.width, height: size.height))
-        }
-        context.restoreGState()
-    }
-
-    static func addFilmGrain(context: CGContext,
-                             size: CGSize,
-                             amount: Double,
-                             seed: UInt64) {
-        var random = DreamRandom(seed: seed == 0 ? 0x123456789ABCDEF : seed)
-        let grainCount = max(200, Int(Double(size.width * size.height) * amount * 0.12))
-        for _ in 0..<grainCount {
-            let x = CGFloat(random.nextFloat()) * size.width
-            let y = CGFloat(random.nextFloat()) * size.height
-            let alpha = 0.02 + CGFloat(random.nextFloat()) * CGFloat(amount)
-            let brightness = 0.7 + CGFloat(random.nextFloat()) * 0.3
-            context.setFillColor(UIColor(white: brightness, alpha: alpha).cgColor)
-            context.fill(CGRect(x: x, y: y, width: 1, height: 1))
-        }
-    }
-}
-
-private enum AudioPlaceholderWriter {
-    static func write(to url: URL,
-                      duration: TimeInterval,
-                      baseFrequency: Double,
-                      profile: DreamScoreProfile) throws {
-        let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1)!
-        let file = try AVAudioFile(forWriting: url, settings: format.settings)
-        let totalFrames = AVAudioFrameCount(max(1, Int(duration * format.sampleRate)))
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: totalFrames) else {
+        let file = try AVAudioFile(forWriting: url, settings: settings)
+        let format = file.processingFormat
+        let frameCount = AVAudioFrameCount(max(1, Int(duration * sampleRate)))
+        guard format.channelCount == 2,
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
             throw DreamMediaComposer.ComposerError.audioGenerationFailed
         }
-        buffer.frameLength = totalFrames
-        let channelData = buffer.floatChannelData![0]
-        let sampleRate = Float(format.sampleRate)
-        let totalDuration = max(Float(duration), 0.1)
-        let base = Float(baseFrequency)
-        let sceneLength = max(3.5, profile.sceneLength)
-        let progression: [[Float]] = profile.progression.isEmpty ? [[0, 7, 12, 19]] : profile.progression
-        let melodyPhrase: [Float] = profile.melody.isEmpty ? [0, 2, 4, 5, 7, 5, 4, 2] : profile.melody
-        let counterPhrase: [Float] = profile.countermelody.isEmpty ? [12, 11, 9, 7, 9, 11, 12, 14] : profile.countermelody
-        let ornamentPhrase: [Float] = profile.ornament.isEmpty ? [5, 7, 9, 10, 9, 7] : profile.ornament
-        let padDetune: [Float] = profile.padSpread.isEmpty ? [-0.18, 0.07, 0.21] : profile.padSpread
-        let rubatoDepth = profile.rubatoDepth
-        let ornamentChance = min(max(profile.ornamentChance, 0), 0.75)
-        let stringSwell = profile.stringSwell
-        let harpBrightness = profile.harpBrightness
-        let textureLevel = profile.textureLevel
-        let noiseFloor = profile.noiseFloor
-        var bassFilter = OnePoleFilter(coefficient: 0.018)
-        var airFilter = OnePoleFilter(coefficient: 0.12)
-        var shimmerFilter = OnePoleFilter(coefficient: 0.05)
-        var textureFilter = OnePoleFilter(coefficient: 0.08)
-        var shimmerDelay = DreamDelay(sampleRate: sampleRate,
-                                      time: 0.32 + 0.12 * rubatoDepth,
-                                      feedback: 0.45 + 0.05 * rubatoDepth)
-        var cloudDelay = DreamDelay(sampleRate: sampleRate,
-                                    time: 0.58 + 0.08 * stringSwell,
-                                    feedback: 0.54)
-        var random = DreamRandom(seed: profile.seed)
+        buffer.frameLength = frameCount
+        let outputL = channels[0]
+        let outputR = channels[1]
 
-        for frame in 0..<Int(totalFrames) {
-            let t = Float(frame) / sampleRate
-            let scenePosition = t / sceneLength
-            let sceneIndex = Int(scenePosition)
-            let chord = progression[sceneIndex % progression.count]
-            let progress = scenePosition - floor(scenePosition)
+        let sr = Float(sampleRate)
+        let delta = 1 / sr
+        let totalFrames = Int(frameCount)
+        let totalSeconds = max(Float(duration), 1)
+        let secondsPerStep = 15 / profile.tempo
+        let stepsPerBar = profile.beatsPerBar * 4
+        let stepsPerChord = stepsPerBar * profile.barsPerChord
+        let heavy = profile.genre == .hardRock || profile.genre == .industrial
+        // Distorted genres sit an octave lower, so the sustained voices move up to keep the low end clear.
+        let voiceOctave: Float = heavy ? 12 : 0
 
-            let macroLFO = sin(t * (0.1 + rubatoDepth * 0.2))
-            let shimmerLFO = sin(t * (1.5 + rubatoDepth * 0.45))
-            let wow = 1 + (0.0015 + rubatoDepth * 0.001) * sin(t * 0.35 + sin(t * 0.08))
-            let padGain = 0.05 + stringSwell * 0.05
-            let pad = padDetune.reduce(Float(0)) { sum, detune in
-                let spread = chord.reduce(Float(0)) { chordSum, interval in
-                    chordSum + waveform(.sine,
-                                         frequency: semitone(base: base * wow * (1 + detune * 0.002), semitone: interval),
-                                         time: t + detune * 0.002,
-                                         vibrato: macroLFO * 0.2)
-                }
-                return sum + spread * padGain
+        func scaleSemitone(_ degree: Int) -> Float {
+            let count = profile.scale.count
+            var octave = degree / count
+            var index = degree % count
+            if index < 0 {
+                index += count
+                octave -= 1
             }
-
-            let arpIndex = Int(progress * Float(chord.count * 2)) % chord.count
-            let arpGate = smoothGate(progress)
-            let arpFreq = semitone(base: base * 2, semitone: chord[arpIndex] + 12)
-            let arp = waveform(.triangle,
-                               frequency: arpFreq,
-                               time: t * (1.3 + 0.2 * sin(t * 0.25)),
-                               vibrato: shimmerLFO * 0.05) * (0.18 + stringSwell * 0.05) * arpGate
-
-            let melodyStep = Int(progress * Float(melodyPhrase.count))
-            let melodyNote = melodyPhrase[melodyStep % melodyPhrase.count]
-            let melodyFreq = semitone(base: base, semitone: melodyNote + 12)
-            let melodyEnv = classicalPhraseEnvelope(progress: progress)
-            let melody = waveform(.sine,
-                                   frequency: melodyFreq,
-                                   time: t + 0.001 * sin(t * 0.6),
-                                   vibrato: 0.02 * sin(t * 0.3)) * (0.28 + harpBrightness * 0.04) * melodyEnv
-
-            let counterIndex = (melodyStep + sceneIndex) % counterPhrase.count
-            let counterFreq = semitone(base: base * 0.5, semitone: counterPhrase[counterIndex])
-            let counterEnv = 0.6 + 0.4 * sin(progress * .pi)
-            let counter = waveform(.triangle,
-                                   frequency: counterFreq,
-                                   time: t * 0.8,
-                                   vibrato: macroLFO * 0.05) * (0.18 + stringSwell * 0.06) * counterEnv
-
-            let bassFreq = semitone(base: base * 0.5, semitone: chord[0] - 12)
-            let rawBass = waveform(.saw,
-                                   frequency: bassFreq * (1 + 0.005 * sin(t * 0.6)),
-                                   time: t,
-                                   vibrato: 0) * 0.35
-            let bass = bassFilter.process(rawBass)
-
-            let shimmerHarm = waveform(.sine,
-                                       frequency: semitone(base: base * 3, semitone: chord[1] + 7),
-                                       time: t,
-                                       vibrato: shimmerLFO * 0.1) * 0.18
-            let shimmer = shimmerFilter.process(shimmerHarm)
-
-            let choirFreq = semitone(base: base * 0.5, semitone: chord[0])
-            let choir = waveform(.sine,
-                                 frequency: choirFreq,
-                                 time: t,
-                                 vibrato: sin(t * 0.05) * 0.3) * (0.16 + stringSwell * 0.05)
-
-            let harpBeat = fmod(progress * 2, 1)
-            let harpEnv = pluckEnvelope(harpBeat)
-            let harpFreq = semitone(base: base * 2.8, semitone: chord[arpIndex])
-            let harp = waveform(.saw,
-                                frequency: harpFreq,
-                                time: t,
-                                vibrato: 0) * (0.1 * harpBrightness) * harpEnv
-
-            var ornamentVoice: Float = 0
-            if ornamentChance > 0 {
-                let ornamentBeat = fmod(progress * 2.5 + Float(sceneIndex) * 0.17, 1)
-                if ornamentBeat < ornamentChance {
-                    let ornamentStep = Int(progress * Float(ornamentPhrase.count))
-                    let ornamentNote = ornamentPhrase[ornamentStep % ornamentPhrase.count]
-                    let ornamentFreq = semitone(base: base * 3, semitone: ornamentNote)
-                    let ornamentEnv = pluckEnvelope(ornamentBeat / max(ornamentChance, 0.001))
-                    ornamentVoice = waveform(.triangle,
-                                             frequency: ornamentFreq,
-                                             time: t * (1.5 + rubatoDepth * 0.3),
-                                             vibrato: shimmerLFO * 0.04) * 0.14 * ornamentEnv
-                }
-            }
-
-            let texture = textureFilter.process((random.nextFloat() * 2 - 1) * textureLevel + sin(t * 0.33) * textureLevel * 0.8)
-            let air = airFilter.process((random.nextFloat() * 2 - 1) * (textureLevel * 0.6))
-
-            let pulse = sin(Float.pi * 2 * 0.33 * t) * 0.04
-
-            let attack = min(1, t / 3)
-            let release = min(1, max(0, (totalDuration - t) / 3.5))
-            let sceneAccent = min(1.2, max(0.55, 0.72 + 0.18 * sin(Float(sceneIndex) * 0.7) + rubatoDepth * 0.15))
-            var signal = (pad + arp + bass + choir + melody + counter + shimmer + harp + ornamentVoice + texture + air + pulse) * attack * release * sceneAccent
-            let wet = signal
-            signal += shimmerDelay.process(wet * 0.6)
-            signal += cloudDelay.process(wet * 0.4)
-            let hiss = (random.nextFloat() * 2 - 1) * noiseFloor
-            channelData[frame] = softClip(signal + hiss)
+            return profile.scale[index] + Float(octave * 12)
         }
+
+        func frequency(_ semitones: Float) -> Float {
+            profile.tonicHz * powf(2, semitones / 12)
+        }
+
+        func sectionTargets(_ position: Float) -> (Float, Float, Float, Float, Float, Float, Float) {
+            switch position {
+            case ..<0.10: return (1.00, 0.70, 0.00, 0.45, 0.35, 0.00, 0.00)
+            case ..<0.28: return (0.90, 0.45, 0.55, 0.85, 0.90, 0.55, 0.60)
+            case ..<0.50: return (1.00, 0.80, 1.00, 0.90, 1.00, 1.00, 1.00)
+            case ..<0.64: return (0.95, 1.00, 0.35, 0.60, 0.65, 0.35, 0.45)
+            case ..<0.88: return (1.00, 0.95, 1.00, 1.00, 1.00, 1.00, 1.00)
+            default: return (0.85, 0.75, 0.40, 0.50, 0.50, 0.25, 0.20)
+            }
+        }
+
+        var chordTones: [Float] = [0, 2, 4, 6].map { scaleSemitone($0) }
+        var chordRootDegree = 0
+
+        var padPhase = [Float](repeating: 0, count: 8)
+        var padFrequency = [Float](repeating: profile.tonicHz, count: 8)
+        var padTarget = [Float](repeating: profile.tonicHz, count: 8)
+        var choirPhase = [Float](repeating: 0, count: 3)
+        var choirFrequency = [Float](repeating: profile.tonicHz, count: 3)
+        var choirTarget = [Float](repeating: profile.tonicHz, count: 3)
+
+        var guitarPhase = [Float](repeating: 0, count: 6)
+        var guitarFrequency = [Float](repeating: profile.tonicHz, count: 6)
+        var guitarAge: Float = 99
+        var guitarGate: Float = 0.2
+
+        var bassPhase: Float = 0
+        var subPhase: Float = 0
+        var bassFrequency = profile.tonicHz * 0.5
+        var bassAge: Float = 99
+
+        var leadPhaseA: Float = 0
+        var leadPhaseB: Float = 0
+        var leadFrequency = profile.tonicHz * 2
+        var leadAge: Float = 99
+        var leadGate: Float = 0.4
+
+        var arpPhase: Float = 0
+        var arpFrequency = profile.tonicHz * 2
+        var arpAge: Float = 99
+        var arpPan: Float = -0.5
+
+        var kickAge: Float = 99
+        var kickVelocity: Float = 0
+        var snareAge: Float = 99
+        var snareVelocity: Float = 0
+        var hatAge: Float = 99
+        var hatVelocity: Float = 0
+        var crashAge: Float = 99
+
+        var padFilterL = StateVariableFilter()
+        var padFilterR = StateVariableFilter()
+        var leadFilter = StateVariableFilter()
+        var bassFilter = StateVariableFilter()
+        var guitarCabA = OnePoleFilter(cutoffHz: 3600, sampleRate: sr)
+        var guitarCabB = OnePoleFilter(cutoffHz: 3600, sampleRate: sr)
+        var guitarBodyA = OnePoleFilter(cutoffHz: 110, sampleRate: sr)
+        var guitarBodyB = OnePoleFilter(cutoffHz: 110, sampleRate: sr)
+        var hatFilter = OnePoleFilter(cutoffHz: 7000, sampleRate: sr)
+        var snareLow = OnePoleFilter(cutoffHz: 6500, sampleRate: sr)
+        var snareHigh = OnePoleFilter(cutoffHz: 320, sampleRate: sr)
+        var crashFilter = OnePoleFilter(cutoffHz: 4200, sampleRate: sr)
+        var crashFilterR = OnePoleFilter(cutoffHz: 4200, sampleRate: sr)
+        var dcBlockerL = DCBlocker()
+        var dcBlockerR = DCBlocker()
+        var reverbL = ReverbChannel(offset: 0, roomSize: profile.reverbSize, damping: 0.3)
+        var reverbR = ReverbChannel(offset: 23, roomSize: profile.reverbSize, damping: 0.3)
+        var delay = PingPongDelay(sampleRate: sr, time: profile.delaySeconds, feedback: 0.36)
+        var limiter = Limiter(threshold: 0.9)
+        var rng = DreamRandom(seed: profile.seed &+ 0x5DEE_CE66_D)
+
+        var mixPad: Float = 0
+        var mixChoir: Float = 0
+        var mixLead: Float = 0
+        var mixArp: Float = 0
+        var mixBass: Float = 0
+        var mixGuitar: Float = 0
+        var mixDrums: Float = 0
+
+        let waveformBuckets = 80
+        var waveformSums = [Double](repeating: 0, count: waveformBuckets)
+        var waveformCounts = [Int](repeating: 0, count: waveformBuckets)
+
+        var lastStep = -1
+        for frame in 0..<totalFrames {
+            let time = Float(frame) / sr
+            let currentStep = Int(time / secondsPerStep)
+
+            if currentStep != lastStep {
+                lastStep = currentStep
+                let stepInBar = currentStep % stepsPerBar
+
+                if currentStep % stepsPerChord == 0 {
+                    let chordIndex = currentStep / stepsPerChord
+                    chordRootDegree = profile.progression[chordIndex % profile.progression.count]
+                    chordTones = [
+                        scaleSemitone(chordRootDegree),
+                        scaleSemitone(chordRootDegree + 2),
+                        scaleSemitone(chordRootDegree + 4),
+                        scaleSemitone(chordRootDegree + 6)
+                    ]
+                    for voice in 0..<8 {
+                        let tone = chordTones[voice % 4]
+                        let octave: Float = voice < 4 ? 0 : 12
+                        let detune: Float = voice < 4 ? -0.07 : 0.07
+                        padTarget[voice] = frequency(tone + voiceOctave + octave + detune)
+                    }
+                    choirTarget[0] = frequency(chordTones[0] + voiceOctave - 12)
+                    choirTarget[1] = frequency(chordTones[1] + voiceOctave)
+                    choirTarget[2] = frequency(chordTones[2] + voiceOctave + 12)
+                }
+
+                if profile.gains.guitar > 0,
+                   let offset = profile.riff[stepInBar % profile.riff.count] {
+                    let root = scaleSemitone(chordRootDegree + offset)
+                    let voicing: [Float] = [root, root + 7, root + 12]
+                    for voice in 0..<6 {
+                        let detune: Float = voice < 3 ? -0.09 : 0.09
+                        guitarFrequency[voice] = frequency(voicing[voice % 3] + detune)
+                    }
+                    guitarAge = 0
+                    var length = secondsPerStep
+                    var lookahead = 1
+                    while lookahead < 8, profile.riff[(stepInBar + lookahead) % profile.riff.count] == nil {
+                        length += secondsPerStep
+                        lookahead += 1
+                    }
+                    guitarGate = length * 0.9
+                }
+
+                if let offset = profile.bassPattern[stepInBar % profile.bassPattern.count] {
+                    let note = scaleSemitone(chordRootDegree + offset)
+                    bassFrequency = frequency(note - (heavy ? 0 : 12))
+                    bassAge = 0
+                }
+
+                if currentStep % 2 == 0 {
+                    let eighth = currentStep / 2
+                    let melodyIndex = eighth % profile.melody.count
+                    if let degree = profile.melody[melodyIndex] {
+                        leadFrequency = frequency(scaleSemitone(degree) + 12 + voiceOctave)
+                        leadAge = 0
+                        var length = secondsPerStep * 2
+                        var lookahead = 1
+                        while lookahead < 4, profile.melody[(melodyIndex + lookahead) % profile.melody.count] == nil {
+                            length += secondsPerStep * 2
+                            lookahead += 1
+                        }
+                        leadGate = length * 0.85
+                    }
+
+                    let arpIndex = eighth % profile.arpPattern.count
+                    if let toneIndex = profile.arpPattern[arpIndex] {
+                        let tone = chordTones[toneIndex % 4] + Float((toneIndex / 4) * 12)
+                        arpFrequency = frequency(tone + (heavy ? 0 : 12))
+                        arpAge = 0
+                        arpPan = arpIndex % 2 == 0 ? -0.55 : 0.55
+                    }
+                }
+
+                let kickHit = profile.kickPattern[stepInBar % profile.kickPattern.count]
+                if kickHit > 0 {
+                    kickAge = 0
+                    kickVelocity = kickHit
+                }
+                let snareHit = profile.snarePattern[stepInBar % profile.snarePattern.count]
+                if snareHit > 0 {
+                    snareAge = 0
+                    snareVelocity = snareHit
+                }
+                let hatHit = profile.hatPattern[stepInBar % profile.hatPattern.count]
+                if hatHit > 0 {
+                    hatAge = 0
+                    hatVelocity = hatHit
+                }
+                if currentStep % (stepsPerBar * 8) == 0 {
+                    crashAge = 0
+                }
+            }
+
+            guitarAge += delta
+            bassAge += delta
+            leadAge += delta
+            arpAge += delta
+            kickAge += delta
+            snareAge += delta
+            hatAge += delta
+            crashAge += delta
+
+            let targets = sectionTargets(time / totalSeconds)
+            let smoothing: Float = 0.0003
+            mixPad += (targets.0 - mixPad) * smoothing
+            mixChoir += (targets.1 - mixChoir) * smoothing
+            mixLead += (targets.2 - mixLead) * smoothing
+            mixArp += (targets.3 - mixArp) * smoothing
+            mixBass += (targets.4 - mixBass) * smoothing
+            mixGuitar += (targets.5 - mixGuitar) * smoothing
+            mixDrums += (targets.6 - mixDrums) * smoothing
+
+            let padGain = mixPad * profile.gains.pad
+            let choirGain = mixChoir * profile.gains.choir
+            let leadGain = mixLead * profile.gains.lead
+            let arpGain = mixArp * profile.gains.arp
+            let bassGain = mixBass * profile.gains.bass
+            let guitarGain = mixGuitar * profile.gains.guitar
+            let drumGain = mixDrums * profile.gains.drums
+
+            var padL: Float = 0
+            var padR: Float = 0
+            if padGain > 0.002 {
+                var sumL: Float = 0
+                var sumR: Float = 0
+                for voice in 0..<8 {
+                    padFrequency[voice] += (padTarget[voice] - padFrequency[voice]) * 0.0025
+                    let vibrato = 1 + 0.0016 * sinf(2 * .pi * (4.3 + Float(voice) * 0.17) * time)
+                    let increment = padFrequency[voice] * vibrato / sr
+                    advance(&padPhase[voice], increment)
+                    let sample = sawWave(phase: padPhase[voice], increment: increment)
+                    let (gainL, gainR) = panGains((Float(voice) / 3.5 - 1) * profile.stereoWidth)
+                    sumL += sample * gainL
+                    sumR += sample * gainR
+                }
+                let cutoff = 620 + profile.brightness * 1500 + 380 * sinf(2 * .pi * 0.06 * time)
+                padL = padFilterL.lowpass(sumL * 0.16, cutoff: cutoff, resonance: 0.9, sampleRate: sr) * padGain
+                padR = padFilterR.lowpass(sumR * 0.16, cutoff: cutoff, resonance: 0.9, sampleRate: sr) * padGain
+            }
+
+            var choirL: Float = 0
+            var choirR: Float = 0
+            if choirGain > 0.002 {
+                for voice in 0..<3 {
+                    choirFrequency[voice] += (choirTarget[voice] - choirFrequency[voice]) * 0.0022
+                    let vibrato = 1 + 0.003 * sinf(2 * .pi * (4.9 + Float(voice) * 0.4) * time + Float(voice))
+                    let increment = choirFrequency[voice] * vibrato / sr
+                    advance(&choirPhase[voice], increment)
+                    let sample = sineWave(phase: choirPhase[voice]) * 0.72
+                        + sineWave(phase: fmodf(choirPhase[voice] * 2, 1)) * 0.18
+                    let (gainL, gainR) = panGains(Float(voice - 1) * 0.6 * profile.stereoWidth)
+                    choirL += sample * gainL
+                    choirR += sample * gainR
+                }
+                let swell = 0.55 + 0.45 * sinf(2 * .pi * 0.045 * time)
+                choirL *= choirGain * 0.12 * swell
+                choirR *= choirGain * 0.12 * swell
+            }
+
+            var guitarL: Float = 0
+            var guitarR: Float = 0
+            if guitarGain > 0.002, guitarAge < guitarGate + 0.5 {
+                let release = guitarAge > guitarGate ? expf(-(guitarAge - guitarGate) * 26) : 1
+                let envelope = attackEnvelope(guitarAge, attack: 0.004) * release * expf(-guitarAge * 1.1)
+                var trackA: Float = 0
+                var trackB: Float = 0
+                for voice in 0..<6 {
+                    let increment = guitarFrequency[voice] / sr
+                    advance(&guitarPhase[voice], increment)
+                    let sample = sawWave(phase: guitarPhase[voice], increment: increment)
+                    if voice < 3 {
+                        trackA += sample
+                    } else {
+                        trackB += sample
+                    }
+                }
+                let drivenA = overdrive(trackA * 0.42 * envelope, drive: profile.drive)
+                let drivenB = overdrive(trackB * 0.42 * envelope, drive: profile.drive)
+                let cabA = guitarCabA.process(drivenA)
+                let cabB = guitarCabB.process(drivenB)
+                let bodyA = cabA - guitarBodyA.process(cabA)
+                let bodyB = cabB - guitarBodyB.process(cabB)
+                guitarL = (bodyA * 0.82 + bodyB * 0.18) * guitarGain * 0.42
+                guitarR = (bodyB * 0.82 + bodyA * 0.18) * guitarGain * 0.42
+            }
+
+            var bass: Float = 0
+            if bassGain > 0.002, bassAge < 6 {
+                let envelope = attackEnvelope(bassAge, attack: 0.006) * expf(-bassAge * (heavy ? 3.2 : 1.1))
+                let increment = bassFrequency / sr
+                advance(&bassPhase, increment)
+                advance(&subPhase, increment * 0.5)
+                let body = sawWave(phase: bassPhase, increment: increment) * 0.55
+                let sub = sineWave(phase: subPhase) * 0.85
+                bass = bassFilter.lowpass((body + sub) * envelope,
+                                          cutoff: 160 + profile.brightness * 620,
+                                          resonance: 1.1,
+                                          sampleRate: sr) * bassGain * 0.4
+            }
+
+            var leadL: Float = 0
+            var leadR: Float = 0
+            if leadGain > 0.002, leadAge < leadGate + 1.8 {
+                let increment = leadFrequency / sr
+                var sample: Float = 0
+                var envelope: Float = 0
+                switch profile.leadVoice {
+                case .violin:
+                    let vibrato = 1 + 0.006 * sinf(2 * .pi * 5.4 * time) * min(1, leadAge / 0.25)
+                    let inc = increment * vibrato
+                    advance(&leadPhaseA, inc)
+                    advance(&leadPhaseB, inc * 1.004)
+                    sample = (sawWave(phase: leadPhaseA, increment: inc) + sawWave(phase: leadPhaseB, increment: inc)) * 0.5
+                    sample = leadFilter.lowpass(sample,
+                                                cutoff: 1400 + profile.brightness * 2200,
+                                                resonance: 1.0,
+                                                sampleRate: sr)
+                    envelope = attackEnvelope(leadAge, attack: 0.14)
+                        * (leadAge > leadGate ? expf(-(leadAge - leadGate) * 6) : 1)
+                case .flute:
+                    let inc = increment * (1 + 0.004 * sinf(2 * .pi * 5.0 * time))
+                    advance(&leadPhaseA, inc)
+                    sample = sineWave(phase: leadPhaseA) * 0.9
+                        + triangleWave(phase: leadPhaseA) * 0.1
+                        + (rng.nextFloat() * 2 - 1) * 0.03
+                    envelope = attackEnvelope(leadAge, attack: 0.07)
+                        * (leadAge > leadGate ? expf(-(leadAge - leadGate) * 9) : 1)
+                case .bell:
+                    advance(&leadPhaseA, increment)
+                    advance(&leadPhaseB, increment * 2.76)
+                    sample = sineWave(phase: leadPhaseA) * 0.75 + sineWave(phase: leadPhaseB) * 0.25
+                    envelope = attackEnvelope(leadAge, attack: 0.005) * expf(-leadAge * 2.2)
+                case .brass:
+                    advance(&leadPhaseA, increment)
+                    advance(&leadPhaseB, increment * 1.006)
+                    sample = sawWave(phase: leadPhaseA, increment: increment) * 0.7
+                        + squareWave(phase: leadPhaseB, increment: increment) * 0.3
+                    sample = leadFilter.lowpass(sample,
+                                                cutoff: 900 + 2600 * min(1, leadAge / 0.3) + profile.brightness * 1200,
+                                                resonance: 1.3,
+                                                sampleRate: sr)
+                    envelope = attackEnvelope(leadAge, attack: 0.05)
+                        * (leadAge > leadGate ? expf(-(leadAge - leadGate) * 8) : 1)
+                case .leadGuitar:
+                    let inc = increment * (1 + 0.009 * sinf(2 * .pi * 5.8 * time) * min(1, leadAge / 0.2))
+                    advance(&leadPhaseA, inc)
+                    sample = overdrive(sawWave(phase: leadPhaseA, increment: inc) * 0.6, drive: profile.drive * 0.9)
+                    sample = leadFilter.lowpass(sample,
+                                                cutoff: 2400 + profile.brightness * 1800,
+                                                resonance: 1.2,
+                                                sampleRate: sr)
+                    envelope = attackEnvelope(leadAge, attack: 0.012)
+                        * (leadAge > leadGate ? expf(-(leadAge - leadGate) * 5) : 1)
+                        * expf(-leadAge * 0.35)
+                }
+                let value = sample * envelope * leadGain * 0.34
+                let (gainL, gainR) = panGains(-0.12 * profile.stereoWidth)
+                leadL = value * gainL
+                leadR = value * gainR
+            }
+
+            var arpL: Float = 0
+            var arpR: Float = 0
+            if arpGain > 0.002, arpAge < 3 {
+                let increment = arpFrequency / sr
+                advance(&arpPhase, increment)
+                let sample: Float
+                let envelope: Float
+                switch profile.arpVoice {
+                case .harp:
+                    sample = triangleWave(phase: arpPhase) * 0.7 + sineWave(phase: arpPhase) * 0.3
+                    envelope = attackEnvelope(arpAge, attack: 0.004) * expf(-arpAge * 3.4)
+                case .glass:
+                    sample = sineWave(phase: arpPhase) * 0.8 + sineWave(phase: fmodf(arpPhase * 3.01, 1)) * 0.2
+                    envelope = attackEnvelope(arpAge, attack: 0.006) * expf(-arpAge * 1.8)
+                case .pluck:
+                    sample = sawWave(phase: arpPhase, increment: increment) * 0.55
+                    envelope = attackEnvelope(arpAge, attack: 0.003) * expf(-arpAge * 6)
+                case .palmMute:
+                    sample = overdrive(sawWave(phase: arpPhase, increment: increment) * 0.5, drive: profile.drive * 0.6)
+                    envelope = attackEnvelope(arpAge, attack: 0.002) * expf(-arpAge * 14)
+                }
+                let value = sample * envelope * arpGain * 0.26
+                let (gainL, gainR) = panGains(arpPan * profile.stereoWidth)
+                arpL = value * gainL
+                arpR = value * gainR
+            }
+
+            var drumL: Float = 0
+            var drumR: Float = 0
+            if drumGain > 0.002 {
+                if kickAge < 1.4, kickVelocity > 0 {
+                    let tune: Float
+                    let decay: Float
+                    switch profile.percussion {
+                    case .orchestral: tune = 62; decay = 3.2
+                    case .cinematic: tune = 52; decay = 6.5
+                    case .rockKit: tune = 48; decay = 8.5
+                    case .metalKit: tune = 46; decay = 11.0
+                    }
+                    let sweep = tune * (kickAge + 3.4 * (1 - expf(-kickAge * 44)) / 44)
+                    let click = profile.percussion == .orchestral ? 0 : expf(-kickAge * 340) * 0.55
+                    let kick = (sinf(2 * .pi * sweep) * expf(-kickAge * decay) + click) * kickVelocity
+                    drumL += kick
+                    drumR += kick
+                }
+                if snareAge < 0.7, snareVelocity > 0 {
+                    let raw = rng.nextFloat() * 2 - 1
+                    let low = snareLow.process(raw)
+                    let band = low - snareHigh.process(low)
+                    let tone = sinf(2 * .pi * 190 * snareAge) * 0.5 + sinf(2 * .pi * 336 * snareAge) * 0.32
+                    let snare = (band * 1.1 + tone * expf(-snareAge * 22)) * expf(-snareAge * 13) * snareVelocity * 0.6
+                    drumL += snare
+                    drumR += snare
+                }
+                if hatAge < 0.45, hatVelocity > 0 {
+                    let raw = rng.nextFloat() * 2 - 1
+                    let hat = (raw - hatFilter.process(raw)) * expf(-hatAge * 46) * hatVelocity * 0.3
+                    let (gainL, gainR) = panGains(0.35 * profile.stereoWidth)
+                    drumL += hat * gainL
+                    drumR += hat * gainR
+                }
+                if crashAge < 2.8 {
+                    let rawL = rng.nextFloat() * 2 - 1
+                    let rawR = rng.nextFloat() * 2 - 1
+                    let envelope: Float = profile.percussion == .orchestral
+                        ? min(1, crashAge / 1.4) * expf(-max(0, crashAge - 1.4) * 2.4) * 0.14
+                        : expf(-crashAge * 2.1) * 0.2
+                    drumL += (rawL - crashFilter.process(rawL)) * envelope
+                    drumR += (rawR - crashFilterR.process(rawR)) * envelope
+                }
+                drumL *= drumGain * 0.85
+                drumR *= drumGain * 0.85
+            }
+
+            let dryL = padL + choirL + guitarL + leadL + arpL + bass * 0.75 + drumL
+            let dryR = padR + choirR + guitarR + leadR + arpR + bass * 0.75 + drumR
+
+            let (delayL, delayR) = delay.process((leadL + arpL) * profile.delayMix,
+                                                 (leadR + arpR) * profile.delayMix)
+            let wetL = reverbL.process((dryL + delayL) * profile.reverbMix)
+            let wetR = reverbR.process((dryR + delayR) * profile.reverbMix)
+
+            var mixL = dcBlockerL.process(dryL + delayL * 0.7 + wetL)
+            var mixR = dcBlockerR.process(dryR + delayR * 0.7 + wetR)
+
+            let mid = (mixL + mixR) * 0.5
+            let side = (mixL - mixR) * 0.5 * (1 + profile.stereoWidth * 0.5)
+            mixL = mid + side
+            mixR = mid - side
+
+            let fade = min(1, time / 1.2) * min(1, max(0, (totalSeconds - time) / 2.2))
+            let gain = limiter.gain(forPeak: max(abs(mixL), abs(mixR)))
+            let finalL = tanhf(mixL * gain * 1.1) * fade
+            let finalR = tanhf(mixR * gain * 1.1) * fade
+            outputL[frame] = finalL
+            outputR[frame] = finalR
+
+            let bucket = min(waveformBuckets - 1, frame * waveformBuckets / totalFrames)
+            let level = Double((abs(finalL) + abs(finalR)) * 0.5)
+            waveformSums[bucket] += level * level
+            waveformCounts[bucket] += 1
+        }
+
         try file.write(from: buffer)
+
+        var peak = 0.0
+        let levels = zip(waveformSums, waveformCounts).map { sum, count -> Double in
+            let value = count > 0 ? (sum / Double(count)).squareRoot() : 0
+            peak = max(peak, value)
+            return value
+        }
+        let normalizer = peak > 0.0001 ? 1 / peak : 1
+        return levels.map { min(1, max(0.05, $0 * normalizer)) }
     }
 }
 
-private enum WaveShape {
-    case sine
-    case triangle
-    case saw
+// MARK: - DSP primitives
+
+/// PolyBLEP correction removes the aliasing "buzz" from naive saw/square oscillators.
+@inline(__always)
+private func polyBlep(_ phase: Float, _ increment: Float) -> Float {
+    guard increment > 0 else { return 0 }
+    if phase < increment {
+        let t = phase / increment
+        return t + t - t * t - 1
+    }
+    if phase > 1 - increment {
+        let t = (phase - 1) / increment
+        return t * t + t + t + 1
+    }
+    return 0
 }
 
-private func waveform(_ shape: WaveShape, frequency: Float, time: Float, vibrato: Float) -> Float {
-    let twoPi = Float.pi * 2
-    let phase = twoPi * frequency * (time + vibrato * 0.002)
-    switch shape {
-    case .sine:
-        return sin(phase)
-    case .triangle:
-        let cycle = phase / twoPi
-        let frac = cycle - Float(floor(Double(cycle)))
-        return 2 * abs(2 * frac - 1) - 1
-    case .saw:
-        let value = fmod(phase, twoPi) / twoPi
-        return (value * 2) - 1
+@inline(__always)
+private func sawWave(phase: Float, increment: Float) -> Float {
+    (2 * phase - 1) - polyBlep(phase, increment)
+}
+
+@inline(__always)
+private func squareWave(phase: Float, increment: Float) -> Float {
+    var value: Float = phase < 0.5 ? 1 : -1
+    value += polyBlep(phase, increment)
+    var shifted = phase - 0.5
+    if shifted < 0 { shifted += 1 }
+    value -= polyBlep(shifted, increment)
+    return value
+}
+
+@inline(__always)
+private func sineWave(phase: Float) -> Float {
+    sinf(phase * 2 * .pi)
+}
+
+@inline(__always)
+private func triangleWave(phase: Float) -> Float {
+    4 * abs(phase - 0.5) - 1
+}
+
+@inline(__always)
+private func advance(_ phase: inout Float, _ increment: Float) {
+    phase += increment
+    if phase >= 1 { phase -= floorf(phase) }
+}
+
+/// Equal-power pan, `-1` hard left … `1` hard right.
+@inline(__always)
+private func panGains(_ pan: Float) -> (Float, Float) {
+    let clamped = min(max(pan, -1), 1)
+    let angle = (clamped + 1) * 0.25 * Float.pi
+    return (cosf(angle), sinf(angle))
+}
+
+@inline(__always)
+private func overdrive(_ input: Float, drive: Float) -> Float {
+    let gain = 1 + drive * 34
+    return tanhf(input * gain) / (1 + drive * 2.2)
+}
+
+@inline(__always)
+private func attackEnvelope(_ age: Float, attack: Float) -> Float {
+    attack <= 0 ? 1 : min(1, age / attack)
+}
+
+private struct StateVariableFilter {
+    private var low: Float = 0
+    private var band: Float = 0
+
+    mutating func lowpass(_ input: Float, cutoff: Float, resonance: Float, sampleRate: Float) -> Float {
+        let safeCutoff = min(max(cutoff, 25), sampleRate * 0.16)
+        let f = 2 * sinf(.pi * safeCutoff / sampleRate)
+        let damping = 1 / max(resonance, 0.55)
+        let high = input - low - damping * band
+        band = min(max(band + f * high, -8), 8)
+        low = min(max(low + f * band, -8), 8)
+        return low
     }
 }
 
-private func semitone(base: Float, semitone: Float) -> Float {
-    base * powf(2, semitone / 12)
-}
-
-private func smoothGate(_ progress: Float) -> Float {
-    max(0, sin(progress * Float.pi))
-}
-
-private func softClip(_ value: Float) -> Float {
-    tanhf(value * 0.9)
-}
-
-private func classicalPhraseEnvelope(progress: Float) -> Float {
-    let rise = min(progress / 0.25, 1)
-    let fall = min(max(0, 1 - progress) / 0.35, 1)
-    return max(0, rise * fall)
-}
-
-private func pluckEnvelope(_ progress: Float) -> Float {
-    max(0, powf(1 - progress, 3))
-}
-
-private struct DreamDelay {
-    private var buffer: [Float]
-    private var index: Int = 0
-    private let feedback: Float
-
-    init(sampleRate: Float, time: Float, feedback: Float) {
-        let length = max(1, Int(sampleRate * time))
-        self.buffer = Array(repeating: 0, count: length)
-        self.feedback = feedback
-    }
+private struct DCBlocker {
+    private var lastInput: Float = 0
+    private var lastOutput: Float = 0
 
     mutating func process(_ input: Float) -> Float {
-        let output = buffer[index]
-        buffer[index] = input + output * feedback
-        index = (index + 1) % buffer.count
+        let output = input - lastInput + 0.9975 * lastOutput
+        lastInput = input
+        lastOutput = output
         return output
     }
 }
 
+private struct CombFilter {
+    private var buffer: [Float]
+    private var index = 0
+    private var store: Float = 0
+    private let feedback: Float
+    private let damping: Float
+
+    init(size: Int, feedback: Float, damping: Float) {
+        buffer = Array(repeating: 0, count: max(1, size))
+        self.feedback = feedback
+        self.damping = damping
+    }
+
+    mutating func process(_ input: Float) -> Float {
+        let output = buffer[index]
+        store = output * (1 - damping) + store * damping
+        buffer[index] = input + store * feedback
+        index += 1
+        if index >= buffer.count { index = 0 }
+        return output
+    }
+}
+
+private struct AllPassFilter {
+    private var buffer: [Float]
+    private var index = 0
+    private let feedback: Float
+
+    init(size: Int, feedback: Float) {
+        buffer = Array(repeating: 0, count: max(1, size))
+        self.feedback = feedback
+    }
+
+    mutating func process(_ input: Float) -> Float {
+        let buffered = buffer[index]
+        let output = -input + buffered
+        buffer[index] = input + buffered * feedback
+        index += 1
+        if index >= buffer.count { index = 0 }
+        return output
+    }
+}
+
+/// Freeverb-style hall, one instance per channel with an offset for stereo decorrelation.
+private struct ReverbChannel {
+    private var combs: [CombFilter]
+    private var allpasses: [AllPassFilter]
+
+    init(offset: Int, roomSize: Float, damping: Float) {
+        let combTunings = [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617]
+        let allpassTunings = [556, 441, 341, 225]
+        combs = combTunings.map { CombFilter(size: $0 + offset, feedback: min(roomSize, 0.96), damping: damping) }
+        allpasses = allpassTunings.map { AllPassFilter(size: $0 + offset, feedback: 0.5) }
+    }
+
+    mutating func process(_ input: Float) -> Float {
+        var output: Float = 0
+        for index in combs.indices {
+            output += combs[index].process(input)
+        }
+        output *= 0.12
+        for index in allpasses.indices {
+            output = allpasses[index].process(output)
+        }
+        return output
+    }
+}
+
+private struct PingPongDelay {
+    private var bufferL: [Float]
+    private var bufferR: [Float]
+    private var index = 0
+    private let feedback: Float
+
+    init(sampleRate: Float, time: Float, feedback: Float) {
+        let length = max(1, Int(sampleRate * max(time, 0.02)))
+        bufferL = Array(repeating: 0, count: length)
+        bufferR = Array(repeating: 0, count: length)
+        self.feedback = feedback
+    }
+
+    mutating func process(_ inputL: Float, _ inputR: Float) -> (Float, Float) {
+        let outputL = bufferL[index]
+        let outputR = bufferR[index]
+        bufferL[index] = inputL + outputR * feedback
+        bufferR[index] = inputR + outputL * feedback
+        index += 1
+        if index >= bufferL.count { index = 0 }
+        return (outputL, outputR)
+    }
+}
+
+private struct Limiter {
+    private var envelope: Float = 0
+    private let threshold: Float
+
+    init(threshold: Float) {
+        self.threshold = threshold
+    }
+
+    mutating func gain(forPeak peak: Float) -> Float {
+        let coefficient: Float = peak > envelope ? 0.35 : 0.00008
+        envelope += (peak - envelope) * coefficient
+        return envelope > threshold ? threshold / envelope : 1
+    }
+}
+
 private struct OnePoleFilter {
-    var value: Float = 0
-    let coefficient: Float
+    private var value: Float = 0
+    private let coefficient: Float
+
+    init(cutoffHz: Float, sampleRate: Float) {
+        coefficient = min(1, 1 - expf(-2 * .pi * max(cutoffHz, 1) / max(sampleRate, 1)))
+    }
 
     mutating func process(_ input: Float) -> Float {
         value += coefficient * (input - value)
@@ -1108,7 +1251,7 @@ private struct OnePoleFilter {
     }
 }
 
-private struct DreamRandom {
+struct DreamRandom {
     private var state: UInt64
 
     init(seed: UInt64) {
@@ -1117,12 +1260,11 @@ private struct DreamRandom {
 
     mutating func nextFloat() -> Float {
         state = state &* 6364136223846793005 &+ 1
-        let result = Float((state >> 33) & 0xFFFFFFFF) / Float(UInt32.max)
-        return result
+        return Float(UInt32(truncatingIfNeeded: state >> 32)) / Float(UInt32.max)
     }
 }
 
-private func makeSeed(from uuid: UUID) -> UInt64 {
+func makeSeed(from uuid: UUID) -> UInt64 {
     var hash: UInt64 = 0xcbf29ce484222325
     withUnsafeBytes(of: uuid.uuid) { bytes in
         for byte in bytes {
@@ -1131,8 +1273,4 @@ private func makeSeed(from uuid: UUID) -> UInt64 {
         }
     }
     return hash
-}
-
-private func clamp(_ value: Double, low: Double, high: Double) -> Double {
-    min(max(value, low), high)
 }

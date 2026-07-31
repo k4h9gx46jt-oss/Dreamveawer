@@ -6,7 +6,8 @@ struct DreamVideoView: View {
     let result: DreamVideoResult
     @Environment(\.dismiss) private var dismiss
     @State private var activeScene = 0
-    @State private var videoPlayer: AVPlayer?
+    @State private var videoPlayer: AVQueuePlayer?
+    @State private var videoLooper: AVPlayerLooper?
     @State private var audioPlayer: AVAudioPlayer?
     @State private var audioProgress: Double = 0
     @State private var audioDuration: TimeInterval = 1
@@ -215,14 +216,13 @@ private struct DreamVideoSceneCard: View {
 
 private extension DreamVideoView {
     func setupMedia() {
+        activateAudioSession()
+
         if let videoURL = result.videoURL {
-            let player = AVPlayer(url: videoURL)
+            let player = AVQueuePlayer()
+            player.isMuted = true
+            videoLooper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: videoURL))
             player.play()
-            player.actionAtItemEnd = .none
-            NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { _ in
-                player.seek(to: .zero)
-                player.play()
-            }
             videoPlayer = player
         }
 
@@ -230,6 +230,8 @@ private extension DreamVideoView {
             do {
                 let audio = try AVAudioPlayer(contentsOf: audioURL)
                 audio.numberOfLoops = -1
+                audio.volume = 1
+                audio.prepareToPlay()
                 audio.play()
                 audioDuration = audio.duration
                 audioPlayer = audio
@@ -240,13 +242,26 @@ private extension DreamVideoView {
         }
     }
 
+    func activateAudioSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay, .allowBluetoothA2DP])
+            try session.setActive(true)
+        } catch {
+            print("Audio session setup failed: \(error.localizedDescription)")
+        }
+    }
+
     func teardownMedia() {
         videoPlayer?.pause()
+        videoLooper?.disableLooping()
+        videoLooper = nil
         videoPlayer = nil
         audioPlayer?.stop()
         audioPlayer = nil
         audioTimer?.invalidate()
         audioTimer = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
     }
 
     func toggleVideoPlayback() {
