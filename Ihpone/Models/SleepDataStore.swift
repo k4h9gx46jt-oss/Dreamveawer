@@ -10,8 +10,21 @@ struct RemoteSleepSessionResult {
 
 @MainActor
 final class SleepDataStore: ObservableObject {
-    @Published private(set) var dreams: [SleepData] = [SleepData.mock(), SleepData.mock(durationHours: 2.3)]
+    @Published private(set) var dreams: [SleepData] = []
     @Published var activeSession: SleepSession?
+
+    private let storageURL: URL
+
+    init() {
+        storageURL = Self.defaultStorageURL
+        dreams = Self.loadFromDisk(at: Self.defaultStorageURL)
+    }
+
+    // Redirects storage to a caller-supplied directory — for unit tests only.
+    init(_testingStorageDirectory: URL) {
+        storageURL = _testingStorageDirectory.appending(path: "dreams.json")
+        dreams = Self.loadFromDisk(at: storageURL)
+    }
 
     func startNewSession() {
         guard activeSession == nil else { return }
@@ -40,6 +53,7 @@ final class SleepDataStore: ObservableObject {
         )
 
         dreams.insert(dream, at: 0)
+        saveToDisk()
         activeSession = nil
         return dream
     }
@@ -50,6 +64,38 @@ final class SleepDataStore: ObservableObject {
         session.recalculateAverages()
         session.analyzeREMProfile()
         _ = await persistSession(session)
+    }
+
+    func deleteDream(id: UUID) {
+        dreams.removeAll { $0.id == id }
+        saveToDisk()
+    }
+
+    // MARK: - Disk persistence
+
+    private static let defaultStorageURL: URL = {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return support.appending(path: "DreamWeaver/dreams.json")
+    }()
+
+    private func saveToDisk() {
+        let url = storageURL
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            let data = try JSONEncoder().encode(dreams)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            print("SleepDataStore: save failed – \(error)")
+        }
+    }
+
+    private static func loadFromDisk(at url: URL) -> [SleepData] {
+        guard let data = try? Data(contentsOf: url),
+              let decoded = try? JSONDecoder().decode([SleepData].self, from: data) else {
+            return []
+        }
+        return decoded
     }
 
     @discardableResult

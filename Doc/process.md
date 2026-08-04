@@ -1,6 +1,6 @@
 # Vision ↔ Implementation Conformance Review
 
-**Last reviewed:** 2026-07-31 against commit `9b3eae6`.
+**Last reviewed:** 2026-08-04.
 
 This document compares the original product vision in [Instruction.md](Instruction.md)
 with what the code actually does. For a plain status list see [STATUS.md](STATUS.md).
@@ -70,17 +70,20 @@ docs described. `HeartRateChartView` and `HRVChartView` never existed.
 
 The vision described an on-device model producing a symbolic reading of the night.
 
-What exists: `AIDreamService.interpret(session:)` accepts the fully analysed
-`SleepSession`, **ignores it**, and returns randomised values plus one of six
-hardcoded narrative strings.
+What exists now:
 
-No cloud provider was ever integrated despite earlier documentation claiming
-OpenAI and Anthropic support. Those claims have been removed from all documents.
+- `BiosignalHeuristic.analyse(session:)` — a deterministic engine that derives
+  mood, narrative, themes, symbolism, intensity, consciousness, and stage
+  percentages directly from the session’s `REMDreamProfile` and biosignals.
+  The narrative references the actual longest REM window start time and duration,
+  measured heart rate and HRV, and their overnight trends. No randomness.
+- `FoundationModelDreamOutput` — a `@Generable` struct that receives a biosignal
+  summary as a prompt and returns an enriched narrative when Apple Intelligence is
+  enabled on the device (`SystemLanguageModel.default.availability == .available`).
+  Any failure falls back silently to the heuristic.
 
-The planned replacement is an on-device engine — Apple Foundation Models with a
-deterministic biosignal heuristic fallback. Cloud providers are explicitly ruled
-out because per-user API cost is incompatible with one-time pricing. See
-[PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) §1.
+Cloud providers remain explicitly ruled out: per-user API cost is incompatible
+with one-time pricing. See [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) §1.
 
 ---
 
@@ -113,6 +116,8 @@ Duration is derived from the REM profile rather than fixed at 10–30 seconds.
 | No soundtrack | Real score generation |
 | Watch install detection unreliable | Reachability and install state now reported explicitly |
 | AI provider default inconsistency | Moot — no providers exist |
+| **Narrative engine was a stub** | `BiosignalHeuristic` + Foundation Models; output now grounded in real biosignals |
+| **No persistence** | `Codable` + `FileManager` atomic write; mocks removed; `deleteDream(id:)` added |
 
 ### 7.2 Open
 
@@ -141,8 +146,7 @@ Full remediation list: [APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md).
 
 ## 8. Testing
 
-Roughly 1 250 lines of unit tests across seven files cover the score, the film
-profile derivation, the composer, session lifecycle and the REM classifier.
+Roughly 1 400 lines of unit tests across nine files.
 
 ```bash
 ./run-tests.sh              # unit tests + watchOS compile check
@@ -150,8 +154,12 @@ profile derivation, the composer, session lifecycle and the REM classifier.
 ./run-tests.sh --all        # unit and UI tests
 ```
 
-Not covered: connectivity (requires paired hardware), HealthKit reads, battery
-behaviour, and anything overnight.
+New suites added with this change:
+
+- **`SleepDataStoreTests`** — disk round-trip, delete, fresh-install empty state, corrupt-file safety.
+- **`NarrativeHeuristicTests`** — mood derivation from every metric combination, narrative groundedness (references actual HR/HRV), stage-percentage accuracy from labelled samples and from `REMDreamProfile`, determinism guarantee.
+
+Not covered: connectivity (requires paired hardware), HealthKit reads, battery behaviour, and anything overnight.
 
 ---
 

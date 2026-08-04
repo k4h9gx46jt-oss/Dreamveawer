@@ -1,6 +1,6 @@
 # DreamWeaver — Implementation Status
 
-**Last verified:** 2026-07-31 (against commit `9b3eae6`)
+**Last verified:** 2026-08-04
 
 This is the **single source of truth** for what the codebase actually does today.
 Every other document in `Doc/` describes either the original product vision
@@ -148,27 +148,29 @@ The output is genuinely novel per session because it is driven by the real
 
 ## 5. Dream interpretation (narrative text)
 
-| Capability | Status |
-| --- | --- |
-| Narrative, themes, symbolism, intensity, consciousness | 🟡 **Stub only** |
-| Cloud AI provider | ❌ Not implemented |
-| On-device language model | ❌ Not implemented |
-| Deterministic biosignal heuristic | ❌ Not implemented |
+| Capability | Status | Notes |
+| --- | --- | --- |
+| Narrative, themes, symbolism, intensity, consciousness | ✅ | Biosignal-derived, deterministic |
+| Cloud AI provider | ❌ | Explicitly ruled out — incompatible with one-time pricing |
+| On-device language model (Foundation Models) | ✅ | `LanguageModelSession` + `@Generable` output; device-capability-gated |
+| Deterministic biosignal heuristic | ✅ | `BiosignalHeuristic` — primary path and Foundation Models fallback |
 
-`AIDreamService.interpret(session:)` currently returns:
+`AIDreamService.interpret(session:)` now operates in two stages:
 
-- a **randomly selected** `DreamMood`
-- one of **six hardcoded narrative strings**
-- `Double.random` values for intensity, consciousness, REM % and deep-sleep %
-- randomly shuffled themes and symbols from fixed pools
+1. **`BiosignalHeuristic.analyse(session:)`** always runs. Derives mood, intensity,
+   consciousness, REM/deep estimates, narrative, themes, and symbolism directly
+   from `REMDreamProfile` metrics and real biosignals. The narrative references
+   the actual longest REM window time, measured HR/HRV values, and their trends.
+2. **Foundation Models enrichment** runs on top when
+   `SystemLanguageModel.default.availability == .available` (Apple Intelligence
+   enabled on the device). A `@Generable FoundationModelDreamOutput` struct
+   receives a biosignal summary prompt and returns a richer narrative, themed
+   vocabulary, and visual prompt. Any failure silently falls back to the heuristic.
 
-**Consequence:** the narrative a user reads is unrelated to how they slept.
-This is the single biggest correctness gap in the product and is a release
-blocker — see [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md).
+REM % and deep-sleep % are now computed from stage-labelled samples when the
+watch transported them; otherwise derived from `REMDreamProfile.totalDuration`.
 
-> Earlier revisions of the docs described OpenAI and Anthropic integrations,
-> API-key configuration and a local heuristic engine. **None of that code has
-> ever existed in this repository.** Those claims have been removed.
+**The narrative a user reads is now grounded in their actual sleep data.**
 
 ---
 
@@ -185,7 +187,7 @@ blocker — see [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md).
 | Calligraphic wordmark branding | ✅ | Great Vibes, both platforms |
 | Share dream narrative as text | ✅ | `ShareLink` in `DreamDetailView` |
 | **Share the rendered MP4** | ❌ | The file exists on disk but is never exposed |
-| **Persistence** | ❌ | See below |
+| **Persistence** | ✅ | `Codable` + `FileManager`, atomic write to Application Support |
 | Settings screen | ❌ | |
 | Onboarding / permission priming | ❌ | |
 | Local notifications ("your dream is ready") | ❌ | No `UNUserNotificationCenter` usage anywhere |
@@ -195,26 +197,18 @@ blocker — see [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md).
 
 ---
 
-## 7. Persistence — known critical gap
+## 7. Persistence
 
-`SleepDataStore` is an in-memory `ObservableObject`:
+`SleepDataStore` now persists to disk on every mutation:
 
-```swift
-@Published private(set) var dreams: [SleepData] = [
-    SleepData.mock(),
-    SleepData.mock(durationHours: 2.3)
-]
-```
+- `init()` calls `loadFromDisk()` — on a fresh install the list starts empty (no more fabricated mocks).
+- `addDream(from:aiResult:)` calls `saveToDisk()` after inserting.
+- `deleteDream(id:)` removes by UUID and calls `saveToDisk()` (also satisfies the GDPR deletion requirement).
+- Storage path: `Application Support/DreamWeaver/dreams.json`.
+- Write uses `.atomic` to prevent corruption on crash.
+- `SleepData` is `Codable`; no model changes were required.
 
-Consequences:
-
-- Every launch shows two **fabricated** dreams that the user never recorded.
-- Every real recorded session is **lost** when the app terminates.
-- Trend analysis, journals and history are impossible to build on top.
-
-`SleepData` is a `Codable struct`, **not** a SwiftData `@Model`. The only
-SwiftData usage in the repository is the unused Xcode template file
-`Ihpone/DreamWeaver/DreamWeaver/Item.swift`, which should be deleted.
+The unused Xcode SwiftData template `Ihpone/DreamWeaver/DreamWeaver/Item.swift` still needs to be deleted (see [APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md) §0.6).
 
 ---
 
@@ -231,8 +225,10 @@ SwiftData usage in the repository is the unused Xcode template file
 | `WatchREMClassifierTests` | 300 | Staging rules, personalised baseline, movement, smoothing |
 | `DreamFixture` | 109 | Shared test data |
 | `DreamWeaverUITests` | 74 | Launch smoke tests |
+| `SleepDataStoreTests` | — | Disk persistence round-trip, delete, fresh-install empty state |
+| `NarrativeHeuristicTests` | — | Mood derivation, narrative groundedness, stage-percentage accuracy |
 
-122 tests pass. Run with [`run-tests.sh`](../run-tests.sh).
+122+ tests pass. Run with [`run-tests.sh`](../run-tests.sh).
 
 ---
 
