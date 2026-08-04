@@ -136,31 +136,75 @@ DREAMWEAVER_DISABLE_WCSESSION=1 xcodebuild test \
 TEST_STATUS=$?
 set -e
 
-# xcodebuild logs a case once per repetition, so only unique names are counted.
-# `grep` exits non-zero when nothing matches, which under `pipefail` would abort the
-# script on a clean run, hence the explicit fallbacks.
-count_unique() {
-  { grep -oE "$1" "$LOG_FILE" || true; } | sort -u | wc -l | tr -d ' '
+# Swift Testing (Xcode 16+) writes a summary line like:
+#   ✔ Test run with 169 tests in 14 suites passed after ...
+# while older XCTest logs expose:
+#   Executed 169 tests, with 0 failures ...
+# Parse both so the script reports accurate counts regardless of framework.
+extract_swift_summary_tests() {
+  local line
+  line="$(grep -E "[[:space:]]*✔ Test run with [0-9]+ tests" "$LOG_FILE" | tail -1 || true)"
+  if [[ -n "$line" ]]; then
+    echo "$line" | sed -E 's/.*with ([0-9]+) tests.*/\1/'
+  else
+    echo ""
+  fi
 }
 
-PASSED="$(count_unique "Test case '[^']+' passed")"
-FAILED="$(count_unique "Test case '[^']+' failed")"
+extract_xctest_summary_tests() {
+  local line
+  line="$(grep -E "Executed [0-9]+ tests, with [0-9]+ failures" "$LOG_FILE" | tail -1 || true)"
+  if [[ -n "$line" ]]; then
+    echo "$line" | sed -E 's/.*Executed ([0-9]+) tests, with ([0-9]+) failures.*/\1 \2/'
+  else
+    echo ""
+  fi
+}
+
+SWIFT_TOTAL="$(extract_swift_summary_tests)"
+XCTEST_SUMMARY="$(extract_xctest_summary_tests)"
+
+TOTAL_TESTS=0
+FAILED=0
+if [[ -n "$SWIFT_TOTAL" ]]; then
+  TOTAL_TESTS="$SWIFT_TOTAL"
+  # Swift Testing emits explicit failed test lines when failures occur.
+  FAILED="$( { grep -E "[[:space:]]*✘ Test " "$LOG_FILE" || true; } | wc -l | tr -d ' ' )"
+elif [[ -n "$XCTEST_SUMMARY" ]]; then
+  TOTAL_TESTS="$(echo "$XCTEST_SUMMARY" | awk '{print $1}')"
+  FAILED="$(echo "$XCTEST_SUMMARY" | awk '{print $2}')"
+fi
+
+PASSED=$(( TOTAL_TESTS - FAILED ))
+if [[ $PASSED -lt 0 ]]; then
+  PASSED=0
+fi
 
 echo "------------------------------------------------------------"
 if [[ $FAILED -gt 0 || $TEST_STATUS -ne 0 ]]; then
   echo "TESTS FAILED  —  passed: $PASSED, failed: $FAILED"
   echo
-  { grep -E "' failed on '|error:|Issue recorded" "$LOG_FILE" || true; } | sort -u | head -40
+  { grep -E "[[:space:]]*✘ Test |' failed on '|error:|Issue recorded" "$LOG_FILE" || true; } | sort -u | head -40
   echo
   echo "Full log: $LOG_FILE"
   exit 1
 fi
 
 echo "ALL TESTS PASSED  —  $PASSED tests"
-{ grep -oE "Test case '[^']+' passed" "$LOG_FILE" || true; } \
-  | sed "s/Test case '//; s/' passed//" \
-  | sort -u \
-  | sed 's|/.*||' \
-  | sort | uniq -c | sort -rn \
-  | awk '{ printf "  %-34s %s\n", $2, $1 }'
+
+# Print a compact per-suite summary for Swift Testing logs.
+if grep -qE "[[:space:]]*✔ Suite \"" "$LOG_FILE"; then
+  { grep -E "[[:space:]]*✔ Suite \"" "$LOG_FILE" || true; } \
+    | sed -E 's/^[[:space:]]*✔ Suite "([^"]+)" passed.*/\1/' \
+    | sort \
+    | awk '{ printf "  %s\n", $0 }'
+else
+  # Fallback for legacy XCTest textual case lines.
+  { grep -oE "Test case '[^']+' passed" "$LOG_FILE" || true; } \
+    | sed "s/Test case '//; s/' passed//" \
+    | sort -u \
+    | sed 's|/.*||' \
+    | sort | uniq -c | sort -rn \
+    | awk '{ printf "  %-34s %s\n", $2, $1 }'
+fi
 echo "------------------------------------------------------------"

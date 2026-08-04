@@ -18,6 +18,11 @@ struct ReleaseConfigurationTests {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    private func exists(_ relativePath: String) -> Bool {
+        let url = repoRoot.appending(path: relativePath)
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
     @Test("iOS target declares HealthKit usage descriptions")
     func iosTargetHasHealthUsageStrings() throws {
         let project = try read("Ihpone/DreamWeaver/DreamWeaver.xcodeproj/project.pbxproj")
@@ -56,7 +61,24 @@ struct ReleaseConfigurationTests {
     @Test("watch extension plist declares workout background processing")
     func watchExtensionPlistHasWorkoutBackgroundMode() throws {
         let plist = try read("Iwatch/WatchExtension-Info.plist")
+        #expect(plist.contains("<key>UIBackgroundModes</key>"))
         #expect(plist.contains("<key>WKBackgroundModes</key>"))
         #expect(plist.contains("<string>workout-processing</string>"))
+    }
+
+    @Test("iOS app bundles a PrivacyInfo manifest")
+    func appHasPrivacyManifest() throws {
+        let manifestPath = "Ihpone/DreamWeaver/DreamWeaver/PrivacyInfo.xcprivacy"
+        #expect(exists(manifestPath))
+
+        let manifest = try read(manifestPath)
+        #expect(manifest.contains("<key>NSPrivacyTracking</key>"))
+        #expect(manifest.contains("<key>NSPrivacyCollectedDataTypes</key>"))
+        #expect(manifest.contains("<key>NSPrivacyAccessedAPITypes</key>"))
+    }
+
+    @Test("template Item.swift is removed from app sources")
+    func templateItemSwiftIsRemoved() {
+        #expect(!exists("Ihpone/DreamWeaver/DreamWeaver/Item.swift"))
     }
 }
