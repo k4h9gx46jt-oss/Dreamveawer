@@ -11,26 +11,22 @@ Status legend: ❌ not done · 🟡 partial · ✅ done
 
 The app cannot function on real hardware or be accepted without these.
 
-### 0.1 HealthKit entitlement ❌
+### 0.1 HealthKit entitlement ✅
 
-No `.entitlements` file exists for any target. Without the HealthKit capability,
-`HKHealthStore.requestAuthorization` fails and every biosignal read returns nothing.
-The simulator masks this; a physical device does not.
+HealthKit entitlement files now exist for both the iOS app and watch extension,
+and both targets wire them through `CODE_SIGN_ENTITLEMENTS`.
 
 Required for **both** the iOS app and the watch app:
 
 ```xml
 <key>com.apple.developer.healthkit</key>
 <true/>
-<key>com.apple.developer.healthkit.access</key>
-<array/>
 ```
 
-### 0.2 iOS usage descriptions ❌
+### 0.2 iOS usage descriptions ✅
 
-The watch extension Info.plist declares them; **the iOS target does not**.
-Calling HealthKit without a usage string is an immediate runtime crash and a
-guaranteed rejection.
+The iOS target now declares `NSHealthShareUsageDescription` and
+`NSHealthUpdateUsageDescription` via generated Info.plist build settings.
 
 Add to the iOS target build settings:
 
@@ -50,20 +46,17 @@ rejects uploads without it. Must declare:
 - Whether data is used for tracking (currently: no)
 - Required-reason API declarations (`UserDefaults` is used → reason code `CA92.1`)
 
-### 0.4 Background modes ❌
+### 0.4 Background modes ✅ (watch) / ❌ (iOS)
 
-The watch target must declare `UIBackgroundModes` including `workout-processing`,
-otherwise overnight tracking is terminated by the system.
+The watch extension already declares `WKBackgroundModes` with
+`workout-processing`. The iOS app target still lacks explicit
+`UIBackgroundModes` declarations.
 
-### 0.5 Persistence ❌
+### 0.5 Persistence ✅
 
-`SleepDataStore` is in-memory and seeded with two `SleepData.mock()` records.
-A reviewer opening a fresh install sees two dreams that were never recorded, and
-any session they record vanishes on relaunch. This reads as a broken app under
-Guideline 2.1 (App Completeness).
-
-Minimum fix: persist `SleepData` to disk (`Codable` + `FileManager`, or migrate to
-SwiftData) and remove the seeded mocks from production builds.
+`SleepDataStore` now persists `SleepData` to
+`Application Support/DreamWeaver/dreams.json` using `Codable` + `FileManager`
+with atomic writes. Fresh installs start empty, and data survives relaunch.
 
 ### 0.6 Remove template leftovers ❌
 

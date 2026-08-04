@@ -67,6 +67,15 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
 
     private override init() {
         super.init()
+        let environment = ProcessInfo.processInfo.environment
+        let arguments = CommandLine.arguments.joined(separator: " ")
+        let isRunningTests =
+            environment["DREAMWEAVER_DISABLE_WCSESSION"] == "1" ||
+            environment["XCTestConfigurationFilePath"] != nil ||
+            ProcessInfo.processInfo.processName == "xctest" ||
+            arguments.contains("xctest") ||
+            environment["SWIFT_TESTING_ENABLE_EXPERIMENTAL_FEATURES"] != nil
+        if isRunningTests { return }
         if WCSession.isSupported() {
             let session = WCSession.default
             self.session = session
@@ -231,6 +240,45 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
             print("Watch status probe failed: \(error.localizedDescription)")
         }
     }
+
+#if DEBUG
+    // Test hooks keep production helpers fileprivate while enabling unit coverage.
+    func _test_decodeSample(from payload: [String: Any]) -> BiosignalDataPoint? {
+        decodeSample(from: payload)
+    }
+
+    func _test_normalizedLiveSamples(_ samples: [BiosignalDataPoint]) -> [BiosignalDataPoint] {
+        normalizedLiveSamples(samples)
+    }
+
+    func _test_updateREM(with timestamp: Date, state: String) {
+        updateREM(with: timestamp, state: state)
+    }
+
+    func _test_finalizeREMWindow(until end: Date) {
+        finalizeREMWindow(until: end)
+    }
+
+    func _test_statusSnapshotPayload() -> [String: Any] {
+        statusSnapshotPayload()
+    }
+
+    func _test_applyLiveSample(_ sample: BiosignalDataPoint, remState: String?) {
+        applyLiveSample(sample, remState: remState)
+    }
+
+    func _test_handleEvent(_ event: String, payload: [String: Any]) {
+        handleEvent(event, payload: payload)
+    }
+
+    func _test_resetLiveState() {
+        resetLiveMetrics()
+        remoteSessionStart = nil
+        remoteSessionEndedAt = nil
+        remoteSessionId = nil
+        remWindows = []
+    }
+#endif
 }
 
 extension PhoneWatchConnectivityManager: WCSessionDelegate {

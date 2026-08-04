@@ -227,8 +227,10 @@ The unused Xcode SwiftData template `Ihpone/DreamWeaver/DreamWeaver/Item.swift` 
 | `DreamWeaverUITests` | 74 | Launch smoke tests |
 | `SleepDataStoreTests` | — | Disk persistence round-trip, delete, fresh-install empty state |
 | `NarrativeHeuristicTests` | — | Mood derivation, narrative groundedness, stage-percentage accuracy |
+| `ReleaseConfigurationTests` | — | iOS/watch entitlements, Health usage strings, watch background modes |
+| `PhoneWatchConnectivityTests` | — | Sample decoding, de-duplication, REM window transitions |
 
-122+ tests pass. Run with [`run-tests.sh`](../run-tests.sh).
+158 tests pass (`./run-tests.sh --all`). Run with [`run-tests.sh`](../run-tests.sh).
 
 ---
 
@@ -248,12 +250,8 @@ The unused Xcode SwiftData template `Ihpone/DreamWeaver/DreamWeaver/Item.swift` 
 
 **Missing and required for device/App Store builds:**
 
-- No `.entitlements` file exists for any target → the HealthKit capability is
-  **not enabled**, so authorization silently fails on real hardware.
-- The iOS target declares **no** `NSHealthShareUsageDescription` /
-  `NSHealthUpdateUsageDescription`. Only the watch extension Info.plist has them.
 - No `PrivacyInfo.xcprivacy` privacy manifest.
-- No `UIBackgroundModes` declaration.
+- No iOS app `UIBackgroundModes` declaration.
 
 Full list: [APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md).
 

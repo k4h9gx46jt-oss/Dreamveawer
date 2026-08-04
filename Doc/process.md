@@ -15,7 +15,7 @@ with what the code actually does. For a plain status list see [STATUS.md](STATUS
 | Watch collects while the phone rests | `WorkoutManager` + `HKWorkoutSession` | ✅ matches |
 | Data syncs during the night | `PhoneWatchConnectivityManager`, 5 s cadence | ✅ exceeds — the vision assumed 5 minutes |
 | Morning: stop from either device | Bidirectional, with state reconciliation | ✅ matches |
-| Symbolic interpretation of the night | `AIDreamService` | ❌ **stub, randomised** |
+| Symbolic interpretation of the night | `AIDreamService` + `BiosignalHeuristic` | ✅ biosignal-grounded with Foundation Models enrichment fallback |
 | Short generated film | `DreamFilmRenderer` produces a real MP4 | ✅ **exceeds the vision** |
 | Soundscape from bio rhythm | `DreamScoreRenderer` produces a real score | ✅ **exceeds the vision** |
 | Journal with notes and titles | Not implemented | ❌ |
@@ -34,7 +34,7 @@ three the vision assumed.
 
 **Divergence:** both are plain `Codable` structs. The vision and earlier docs
 assumed SwiftData `@Model` entities with cascade relationships. That code does not
-exist, and consequently **nothing is persisted**.
+exist. Persistence is now implemented with `FileManager` + `JSONEncoder`.
 
 ---
 
@@ -123,12 +123,8 @@ Duration is derived from the REM profile rather than fixed at 10–30 seconds.
 
 | Gap | Severity | Notes |
 | --- | --- | --- |
-| **No persistence** | 🔴 blocker | In-memory store seeded with two mocks; every session is lost on relaunch |
-| **Narrative engine is a stub** | 🔴 blocker | Output unrelated to the user's sleep |
-| **HealthKit entitlement missing** | 🔴 blocker | No `.entitlements` file for any target |
 | **No `PrivacyInfo.xcprivacy`** | 🔴 blocker | Upload rejected by App Store Connect |
-| **No `UIBackgroundModes`** | 🔴 blocker | Overnight sessions terminated by the system |
-| iOS target lacks HealthKit usage strings | 🔴 blocker | Runtime crash on first HealthKit call |
+| **No `UIBackgroundModes` on iOS app target** | 🔴 blocker | iOS companion app still lacks explicit background mode declarations |
 | HealthKit auth failures invisible to the user | 🟠 | `WorkoutManager` only `print`s errors |
 | No notifications | 🟠 | The vision's morning payoff moment is missing |
 | Rendered film never shareable | 🟠 | File exists on disk, no UI exposes it |
@@ -158,8 +154,10 @@ New suites added with this change:
 
 - **`SleepDataStoreTests`** — disk round-trip, delete, fresh-install empty state, corrupt-file safety.
 - **`NarrativeHeuristicTests`** — mood derivation from every metric combination, narrative groundedness (references actual HR/HRV), stage-percentage accuracy from labelled samples and from `REMDreamProfile`, determinism guarantee.
+- **`ReleaseConfigurationTests`** — verifies iOS/watch HealthKit entitlements, required Health usage strings, and watch background-mode declarations from project source files.
+- **`PhoneWatchConnectivityTests`** — validates phone-side sample decoding, timestamp de-duplication, and REM window state transitions used by the watch sync protocol.
 
-Not covered: connectivity (requires paired hardware), HealthKit reads, battery behaviour, and anything overnight.
+Still not covered by automated tests: paired-device WCSession delivery reliability, live HealthKit permissions/read behaviour on hardware, battery behaviour, and overnight endurance.
 
 ---
 

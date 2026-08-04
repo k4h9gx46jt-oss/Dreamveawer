@@ -8,6 +8,7 @@ set -euo pipefail
 #   ./run-tests.sh --watch        # only the Watch sleep-staging suite
 #   ./run-tests.sh --all          # unit tests and UI tests
 #   ./run-tests.sh --ui           # UI tests only
+#   ./run-tests.sh --boot-watch-runtime  # launch iPhone + Watch sims/apps first
 #   ./run-tests.sh --no-watch-build   # skip the watchOS compile check
 #   ./run-tests.sh --filter DreamScoreTests
 #   ./run-tests.sh --filter DreamScoreTests/phrasesAreFourBars
@@ -33,6 +34,7 @@ export DEVELOPER_DIR
 RUN_UNIT=1
 RUN_UI=0
 WATCH_BUILD=1
+BOOT_WATCH_RUNTIME=0
 FILTER=""
 
 while [[ $# -gt 0 ]]; do
@@ -41,6 +43,7 @@ while [[ $# -gt 0 ]]; do
     --ui) RUN_UNIT=0; RUN_UI=1; shift ;;
     --unit) RUN_UNIT=1; RUN_UI=0; shift ;;
     --watch) RUN_UNIT=1; RUN_UI=0; FILTER="$WATCH_SUITE"; shift ;;
+    --boot-watch-runtime) BOOT_WATCH_RUNTIME=1; shift ;;
     --no-watch-build) WATCH_BUILD=0; shift ;;
     --filter)
       [[ $# -ge 2 ]] || { echo "--filter needs a value" >&2; exit 1; }
@@ -97,6 +100,13 @@ echo "Running: ${TEST_ARGS[*]:-all tests}"
 echo "Log: $LOG_FILE"
 echo
 
+if [[ $BOOT_WATCH_RUNTIME -eq 1 ]]; then
+  echo "Booting iPhone + Watch simulators and launching apps via start-dreamweaver.sh..."
+  "$ROOT_DIR/start-dreamweaver.sh" > "$DERIVED_DATA_DIR/last-watch-runtime-boot.log" 2>&1
+  echo "Runtime boot complete."
+  echo
+fi
+
 # The watch shares Shared/ with the app, so a watch-breaking change must fail here too.
 if [[ $WATCH_BUILD -eq 1 ]]; then
   echo "Compiling the Watch app to check the shared sources..."
@@ -115,10 +125,11 @@ if [[ $WATCH_BUILD -eq 1 ]]; then
 fi
 
 set +e
-xcodebuild test \
+DREAMWEAVER_DISABLE_WCSESSION=1 xcodebuild test \
   -project "$PROJECT_FILE" \
   -scheme "$SCHEME" \
   -destination "platform=iOS Simulator,id=$IOS_UDID" \
+  -parallel-testing-enabled NO \
   -derivedDataPath "$DERIVED_DATA_DIR" \
   "${TEST_ARGS[@]}" \
   > "$LOG_FILE" 2>&1
