@@ -36,21 +36,21 @@ Add to the iOS target build settings:
 Keep the wording specific about *why* — vague strings are rejected under
 Guideline 5.1.1(i).
 
-### 0.3 Privacy manifest ❌
+### 0.3 Privacy manifest ✅
 
-`PrivacyInfo.xcprivacy` has been mandatory since 1 May 2024. App Store Connect
-rejects uploads without it. Must declare:
+`PrivacyInfo.xcprivacy` is present and bundled in the app. It declares:
 
-- Collected data types — Health & Fitness, plus Identifiers if analytics are added
-- Whether data is linked to identity (currently: no)
-- Whether data is used for tracking (currently: no)
-- Required-reason API declarations (`UserDefaults` is used → reason code `CA92.1`)
+- Collected data types — Health and Fitness, both marked *not linked* to identity
+  and *not used for tracking*, purpose App Functionality
+- Tracking — `NSPrivacyTracking` is `false`, no tracking domains
+- Required-reason API — `NSPrivacyAccessedAPICategoryUserDefaults`, reason `CA92.1`
 
-### 0.4 Background modes ✅ (watch) / ❌ (iOS)
+### 0.4 Background modes ✅
 
-The watch extension already declares `WKBackgroundModes` with
-`workout-processing`. The iOS app target still lacks explicit
-`UIBackgroundModes` declarations.
+The watch extension declares `WKBackgroundModes` with `workout-processing`. The
+iOS app declares `UIBackgroundModes` = `audio` so the generated dream soundtrack
+keeps playing with the screen locked, via `Ihpone/DreamWeaver/Info.plist` merged
+with the generated Info.plist keys.
 
 ### 0.5 Persistence ✅
 
@@ -58,10 +58,10 @@ The watch extension already declares `WKBackgroundModes` with
 `Application Support/DreamWeaver/dreams.json` using `Codable` + `FileManager`
 with atomic writes. Fresh installs start empty, and data survives relaunch.
 
-### 0.6 Remove template leftovers ❌
+### 0.6 Remove template leftovers ✅
 
-Delete `Ihpone/DreamWeaver/DreamWeaver/Item.swift` — an unused Xcode SwiftData
-template model.
+The unused Xcode SwiftData template `Item.swift` is no longer present in the app
+sources.
 
 ---
 
@@ -85,22 +85,25 @@ Two acceptable paths:
 Also required regardless: **do not** imply the app detects sleep apnea. Apple
 reserves that claim for cleared features.
 
-### 1.2 Permission denial handling ❌
+### 1.2 Permission denial handling 🟡
 
-`WorkoutManager` only `print`s authorization errors. If a user denies HealthKit,
-the app shows zeros with no explanation. Reviewers deliberately deny permissions.
+The iPhone shows a `HealthAccessBanner` when Health is unavailable (with a deep
+link to Settings) or not yet granted, and `WorkoutManager` publishes
+`healthAccessDenied`, which the watch surfaces as a notice. HealthKit still hides
+*read*-grant status by design, so a silent read denial cannot be detected
+directly — the banner covers the unavailable and not-yet-requested cases.
 
-Need: a visible state explaining what is unavailable and a deep link to Settings.
+### 1.3 Onboarding ✅
 
-### 1.3 Onboarding ❌
+`OnboardingView` runs on first launch (gated by `OnboardingGate`), explains the
+product and the watch, and primes HealthKit in context. The final step never
+blocks — the user can proceed even if they decline.
 
-No first-run flow. Permission prompts appear with no context, which depresses
-grant rates and looks unfinished.
+### 1.4 Empty states 🟡
 
-### 1.4 Empty states ❌
-
-With mocks removed, a fresh install has zero dreams. Every screen needs a designed
-empty state.
+The dashboard shows a designed empty state on a fresh install
+(`DreamDashboardModel.showsEmptyState`). The remaining screens (detail, tracking)
+should still be audited for their own empty states.
 
 ### 1.5 Data deletion and export ❌
 

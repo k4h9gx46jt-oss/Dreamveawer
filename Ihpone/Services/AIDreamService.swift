@@ -38,6 +38,13 @@ struct DreamVideoResult: Identifiable {
     let diagnostics: [String: String]
 }
 
+extension DreamVideoResult {
+    /// Files a user can export from the share sheet — the film first, then its score.
+    var shareableItems: [URL] {
+        [videoURL, audioURL].compactMap { $0 }
+    }
+}
+
 // MARK: - Foundation Models structured output
 
 @Generable

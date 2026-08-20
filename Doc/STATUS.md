@@ -186,10 +186,10 @@ watch transported them; otherwise derived from `REMDreamProfile.totalDuration`.
 | Particle visualisation (legacy path) | ✅ | `ParticleEngine`, 60 particles |
 | Calligraphic wordmark branding | ✅ | Great Vibes, both platforms |
 | Share dream narrative as text | ✅ | `ShareLink` in `DreamDetailView` |
-| **Share the rendered MP4** | ❌ | The file exists on disk but is never exposed |
+| **Share the rendered MP4** | ✅ | `ShareLink` exposes the film + score in `DreamVideoView` (`DreamVideoResult.shareableItems`) |
 | **Persistence** | ✅ | `Codable` + `FileManager`, atomic write to Application Support |
 | Settings screen | ❌ | |
-| Onboarding / permission priming | ❌ | |
+| Onboarding / permission priming | ✅ | `OnboardingView` first-run flow primes HealthKit; `HealthAccessBanner` handles unavailable/not-granted |
 | Local notifications ("your dream is ready") | ❌ | No `UNUserNotificationCenter` usage anywhere |
 | Search / filter the journal | ❌ | |
 | Trend analysis across nights | ❌ | |
@@ -227,10 +227,14 @@ The unused Xcode SwiftData template `Ihpone/DreamWeaver/DreamWeaver/Item.swift` 
 | `DreamWeaverUITests` | 74 | Launch smoke tests |
 | `SleepDataStoreTests` | — | Disk persistence round-trip, delete, fresh-install empty state |
 | `NarrativeHeuristicTests` | — | Mood derivation, narrative groundedness, stage-percentage accuracy |
-| `ReleaseConfigurationTests` | — | iOS/watch entitlements, Health usage strings, watch background modes |
+| `ReleaseConfigurationTests` | — | iOS/watch entitlements, Health usage strings, privacy manifest, iOS `audio` background mode |
 | `PhoneWatchConnectivityTests` | — | Sample decoding, de-duplication, REM window transitions |
+| `DreamShareTests` | — | Film-before-score share ordering; empty when nothing rendered |
+| `HealthAccessStateTests` | — | Health availability/permission resolution and banner descriptors |
+| `OnboardingGateTests` | — | First-run gating and storage-key stability |
+| `DreamDashboardModelTests` | — | Dashboard empty-state rule |
 
-158 tests pass (`./run-tests.sh --all`). Run with [`run-tests.sh`](../run-tests.sh).
+191 tests pass (`./run-tests.sh`). Run with [`run-tests.sh`](../run-tests.sh).
 
 ---
 
@@ -248,10 +252,10 @@ The unused Xcode SwiftData template `Ihpone/DreamWeaver/DreamWeaver/Item.swift` 
 | Watch extension bundle ID | `GJDRW.DreamWeaver.watchkitapp.watchkitextension` |
 | Code signing | Automatic, team `28TCC8Y78C` |
 
-**Missing and required for device/App Store builds:**
+**Device/App Store build configuration:**
 
-- No `PrivacyInfo.xcprivacy` privacy manifest.
-- No iOS app `UIBackgroundModes` declaration.
+- `PrivacyInfo.xcprivacy` present and bundled — declares Health & Fitness (App Functionality, unlinked, untracked) and the `UserDefaults` required-reason API (`CA92.1`).
+- iOS app `UIBackgroundModes` declares `audio` (dream soundtrack playback) via `Ihpone/DreamWeaver/Info.plist`, merged with the generated Info.plist keys.
 
 Full list: [APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md).
 

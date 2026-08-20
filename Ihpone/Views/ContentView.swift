@@ -3,6 +3,8 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var dataStore: SleepDataStore
     @EnvironmentObject private var connectivity: PhoneWatchConnectivityManager
+    @StateObject private var healthAccess = HealthAccessModel()
+    @AppStorage(OnboardingGate.storageKey) private var hasCompletedOnboarding = false
     @State private var showingTracking = false
     @State private var selectedDream: SleepData?
 
@@ -10,6 +12,15 @@ struct ContentView: View {
         NavigationSplitView {
             VStack(spacing: 12) {
                 watchStatusBanner
+                if let descriptor = healthAccess.state.descriptor {
+                    HealthAccessBanner(descriptor: descriptor) {
+                        if descriptor.opensSettings {
+                            healthAccess.openSettings()
+                        } else {
+                            Task { await healthAccess.request() }
+                        }
+                    }
+                }
                 DreamDashboardView(
                     lastDream: dataStore.dreams.first,
                     history: dataStore.dreams,
@@ -45,6 +56,19 @@ struct ContentView: View {
 
             }
         }
+        .task { await healthAccess.refresh() }
+        .fullScreenCover(isPresented: onboardingBinding) {
+            OnboardingView(healthAccess: healthAccess) {
+                hasCompletedOnboarding = true
+            }
+        }
+    }
+
+    private var onboardingBinding: Binding<Bool> {
+        Binding(
+            get: { OnboardingGate.shouldPresent(hasCompletedOnboarding: hasCompletedOnboarding) },
+            set: { presenting in if !presenting { hasCompletedOnboarding = true } }
+        )
     }
 }
 

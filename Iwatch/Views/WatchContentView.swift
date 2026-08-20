@@ -53,6 +53,23 @@ struct WatchContentView: View {
         }
     }
 
+    private var healthAccessNotice: some View {
+        VStack(spacing: 4) {
+            Label("Health access needed", systemImage: "heart.slash")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.pink)
+            Text("Allow DreamWeaver in Settings › Privacy › Health to capture your night.")
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 10).fill(.white.opacity(0.08)))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Health access needed. Allow DreamWeaver in Settings, Privacy, Health.")
+    }
+
     private var trackingPager: some View {
         TabView {
             ScrollView {
@@ -73,6 +90,10 @@ struct WatchContentView: View {
             DreamWeaverWordmark(size: 22)
 
             connectionBadge
+
+            if workoutManager.healthAccessDenied {
+                healthAccessNotice
+            }
 
             compactSessionButton
 

@@ -77,6 +77,39 @@ struct ReleaseConfigurationTests {
         #expect(manifest.contains("<key>NSPrivacyAccessedAPITypes</key>"))
     }
 
+    @Test("Privacy manifest declares the UserDefaults required-reason API")
+    func manifestDeclaresUserDefaultsReason() throws {
+        let manifest = try read("Ihpone/DreamWeaver/DreamWeaver/PrivacyInfo.xcprivacy")
+        #expect(manifest.contains("NSPrivacyAccessedAPICategoryUserDefaults"))
+        #expect(manifest.contains("CA92.1"))
+    }
+
+    @Test("Privacy manifest declares Health & Fitness data, unlinked and untracked")
+    func manifestDeclaresHealthData() throws {
+        let manifest = try read("Ihpone/DreamWeaver/DreamWeaver/PrivacyInfo.xcprivacy")
+        #expect(manifest.contains("NSPrivacyCollectedDataTypeHealth"))
+        #expect(manifest.contains("NSPrivacyCollectedDataTypeFitness"))
+        #expect(manifest.contains("NSPrivacyCollectedDataTypePurposeAppFunctionality"))
+        // The product promise is on-device only: nothing is tracked or linked to identity.
+        #expect(!manifest.contains("<true/>"))
+    }
+
+    @Test("iOS app declares the audio background mode for soundtrack playback")
+    func iosAppDeclaresAudioBackgroundMode() throws {
+        let plistPath = "Ihpone/DreamWeaver/Info.plist"
+        #expect(exists(plistPath))
+
+        let plist = try read(plistPath)
+        #expect(plist.contains("<key>UIBackgroundModes</key>"))
+        #expect(plist.contains("<string>audio</string>"))
+    }
+
+    @Test("iOS target wires the physical Info.plist")
+    func iosTargetWiresInfoPlist() throws {
+        let project = try read("Ihpone/DreamWeaver/DreamWeaver.xcodeproj/project.pbxproj")
+        #expect(project.contains("INFOPLIST_FILE = Info.plist;"))
+    }
+
     @Test("template Item.swift is removed from app sources")
     func templateItemSwiftIsRemoved() {
         #expect(!exists("Ihpone/DreamWeaver/DreamWeaver/Item.swift"))

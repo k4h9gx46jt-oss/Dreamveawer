@@ -575,6 +575,7 @@
 				DEVELOPMENT_TEAM = 28TCC8Y78C;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "DreamWeaver reads your Health data (heart rate, HRV, and sleep metrics) to generate biosignal-grounded dream insights.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "DreamWeaver writes workout-linked sleep session data to keep your dream history in sync across devices.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -610,6 +611,7 @@
 				DEVELOPMENT_TEAM = 28TCC8Y78C;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "DreamWeaver reads your Health data (heart rate, HRV, and sleep metrics) to generate biosignal-grounded dream insights.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "DreamWeaver writes workout-linked sleep session data to keep your dream history in sync across devices.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

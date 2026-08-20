@@ -25,6 +25,17 @@ struct DreamVideoView: View {
             }
             .padding()
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if !result.shareableItems.isEmpty {
+                        ShareLink(
+                            items: result.shareableItems,
+                            preview: { _ in SharePreview(result.headline) }
+                        ) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel("Share dream film")
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }

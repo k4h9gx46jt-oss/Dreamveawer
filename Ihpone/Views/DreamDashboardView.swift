@@ -31,18 +31,24 @@ struct DreamDashboardView: View {
                         }
                     }
 
-                    Text("Dream History")
-                        .font(.title3.bold())
-                        .padding(.horizontal)
+                    if DreamDashboardModel.showsEmptyState(history: history) {
+                        DreamHistoryEmptyState()
+                            .padding(.horizontal)
+                            .padding(.bottom, 24)
+                    } else {
+                        Text("Dream History")
+                            .font(.title3.bold())
+                            .padding(.horizontal)
 
-                    VStack(spacing: 12) {
-                        ForEach(history) { dream in
-                            DreamHistoryRow(dream: dream)
-                                .onTapGesture { dreamTapped(dream) }
+                        VStack(spacing: 12) {
+                            ForEach(history) { dream in
+                                DreamHistoryRow(dream: dream)
+                                    .onTapGesture { dreamTapped(dream) }
+                            }
                         }
+                        .padding(.horizontal)
+                        .padding(.bottom, 24)
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom, 24)
                 }
                 .padding(.top, 32)
             }
@@ -138,5 +144,39 @@ private struct DreamHistoryRow: View {
         .padding()
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 20))
+    }
+}
+
+/// Decides when the dashboard shows its first-run empty state. Separated from the
+/// view so the rule is unit-testable.
+enum DreamDashboardModel {
+    nonisolated static func showsEmptyState(history: [SleepData]) -> Bool {
+        history.isEmpty
+    }
+}
+
+private struct DreamHistoryEmptyState: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "moon.zzz.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(.white)
+                .symbolRenderingMode(.hierarchical)
+            Text("No dreams yet")
+                .font(.headline)
+                .foregroundStyle(.white)
+            Text("Wear your Apple Watch and start Dream Mode tonight. Your first dream film appears here in the morning.")
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.85))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(24)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.white.opacity(0.12))
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No dreams yet. Start Dream Mode on your Apple Watch tonight.")
     }
 }

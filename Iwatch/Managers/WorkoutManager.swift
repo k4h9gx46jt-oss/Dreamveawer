@@ -25,6 +25,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published private(set) var remWindows: [REMWindow] = []
     @Published private(set) var currentREMState: REMState = .light
     @Published private(set) var startedAutomatically = false
+    @Published private(set) var healthAccessDenied = false
     private var sampleREMStates: [UUID: REMState] = [:]
     private var remClassifier = REMClassifier(configuration: .overnight)
 
@@ -59,7 +60,7 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func start(remoteSessionId: UUID? = nil, automatically: Bool = false) {
         guard !isTracking else { return }
-        Task { try? await requestAuthorization() }
+        Task { await requestAuthorizationTrackingFailures() }
         configureWorkout()
         elapsed = 0
         samples.removeAll()
@@ -117,7 +118,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     private func resumeExistingSession(sessionId: UUID, startDate: Date) {
-        Task { try? await requestAuthorization() }
+        Task { await requestAuthorizationTrackingFailures() }
         configureWorkout()
         self.sessionId = sessionId
         sessionStartDate = startDate
@@ -154,6 +155,15 @@ final class WorkoutManager: NSObject, ObservableObject {
             builder?.beginCollection(withStart: Date()) { _, _ in }
         } catch {
             print("Failed to start workout: \(error.localizedDescription)")
+        }
+    }
+
+    private func requestAuthorizationTrackingFailures() async {
+        do {
+            try await requestAuthorization()
+            healthAccessDenied = false
+        } catch {
+            healthAccessDenied = true
         }
     }
 
